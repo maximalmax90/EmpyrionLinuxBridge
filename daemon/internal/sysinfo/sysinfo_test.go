@@ -69,6 +69,33 @@ func TestReadNetIfacesFrom_SkipsIfaceWithoutStatistics(t *testing.T) {
 	}
 }
 
+func TestReadNetIfacesFrom_SkipsVirtualIfaces(t *testing.T) {
+	root := t.TempDir()
+	devRoot := t.TempDir()
+
+	physTarget := filepath.Join(devRoot, "pci0000:00", "net", "enp7s0")
+	writeNetFile(t, filepath.Join(physTarget, "statistics", "rx_bytes"), "10")
+	writeNetFile(t, filepath.Join(physTarget, "statistics", "tx_bytes"), "20")
+	if err := os.Symlink(physTarget, filepath.Join(root, "enp7s0")); err != nil {
+		t.Fatal(err)
+	}
+
+	virtTarget := filepath.Join(devRoot, "devices", "virtual", "net", "docker0")
+	writeNetFile(t, filepath.Join(virtTarget, "statistics", "rx_bytes"), "999999")
+	writeNetFile(t, filepath.Join(virtTarget, "statistics", "tx_bytes"), "999999")
+	if err := os.Symlink(virtTarget, filepath.Join(root, "docker0")); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ReadNetIfacesFrom(root)
+	if err != nil {
+		t.Fatalf("ReadNetIfacesFrom: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "enp7s0" {
+		t.Fatalf("got %+v, want только enp7s0 (docker0 — виртуальный, должен быть исключён)", got)
+	}
+}
+
 func TestReadNetIfacesFrom_MissingRootIsNotAnError(t *testing.T) {
 	got, err := ReadNetIfacesFrom(filepath.Join(t.TempDir(), "missing"))
 	if err != nil {

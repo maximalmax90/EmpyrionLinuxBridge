@@ -11,7 +11,7 @@ import (
 	"elb/daemon/internal/config"
 )
 
-const Version = "0.0.110"
+const Version = "0.0.112"
 
 type Identity struct {
 	ServerName    string `json:"serverName"`
