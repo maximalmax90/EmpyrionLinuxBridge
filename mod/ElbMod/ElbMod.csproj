@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ElbMod</AssemblyName>
+    <RootNamespace>ElbMod</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <!-- ModApi.dll и т.п. — из файлов сервера, локально в vendor/gameserver (не в git, см. .gitignore) -->
+    <GameServerDir>$(MSBuildThisFileDirectory)..\..\vendor\gameserver</GameServerDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Не EmpyrionAdminHelper\ModApi.dll (EAH) — та копия старее и не содержит
+         GlobalStructureInfo. Берём копию рядом с самим EmpyrionDedicated.exe —
+         именно её грузит запущенный сервер. -->
+    <Reference Include="ModApi">
+      <HintPath>$(GameServerDir)\DedicatedServer\EmpyrionDedicated_Data\Managed\ModApi.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- GlobalStructureInfo/PVector3 и т.п. определены здесь, не в ModApi.dll -->
+    <Reference Include="Mif">
+      <HintPath>$(GameServerDir)\DedicatedServer\EmpyrionDedicated_Data\Managed\Mif.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Нужна только для разрешения перегрузки IStructure.GetDevice<T>(Vector3)
+         рядом с GetDevice<T>(VectorInt3) — сама Vector3 в коде мода не
+         используется. Уже загружена в процессе сервером, поэтому Private=false. -->
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameServerDir)\DedicatedServer\EmpyrionDedicated_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <!-- Тексты ответов "cb:"-команд — не хардкод в коде, чтобы админ мог
+       редактировать/добавлять языки прямо на сервере без пересборки мода. -->
+  <ItemGroup>
+    <None Include="Translations\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,82 @@
+# !! For latest info on available parameters and other details, see gameoptions_example.yaml, e.g. in Content\Scenarios\Default Random !!
+Options:
+  - ValidFor: [ SP, Survival ]
+    DecayTime: 0
+    WipeTime: 0
+    ProtectTime: 0
+    ProtectDelay: 0
+    MaxStructures: 255
+    AntiGriefDistancePvE: 0
+    AntiGriefDistancePvP: 0
+    AntiGriefOresDistance: 0   
+    # AntiGriefOresZone: PvE      
+    EnableTrading: Player2System   
+    EnableMaxBlockCount: False
+    # EnableVolumeWeight: False         # default value
+    # EnableCPUPoints: False            # default value
+    # AutoMinerDepletion: True          # default value
+    GroundedStructureSpawn: False
+    # TurretUndergroundCheck: False     # default value
+    # OriginDefault: Neutral            # default value
+    # OriginAccessOthers: True          # default value
+    # OriginAutoAlliance: True          # default value
+    # FriendlyFireInPvP: True           # default value
+    # MaxSpawnedEnemies: 60             # default value
+    # DespawnEscapePod: False           # default value
+    # RegeneratePOIs: False             # default value
+    # FOWTransparency: 0                # default value
+    # DSLUnloadSecs: 30                 # default value
+    # DSLDistancePlanet: 1200           # default value
+    # DSLDistanceSpace: 3000            # default value
+    # ForcePvP: False                   # default value
+    # OriginFactionStart: False         # default value
+    # ThrustersNeedOpenSpace: False     # default value
+    # UndergroundBpSpawn: Always        # Permission for spawning Blueprints below terrain [Always (default), PvE, Never]
+
+  - ValidFor: [ MP, Survival ]
+    # DecayTime: 24                     # default value
+    # WipeTime: 0                       # default value
+    # ProtectTime: 48                   # default value
+    # ProtectDelay: 300                 # default value
+    # MaxStructures: 200                # default value
+    # AntiGriefDistancePvE: 30          # default value
+    # AntiGriefDistancePvP: 300         # default value
+    # AntiGriefOresDistance: 30         # default value
+    # AntiGriefOresZone: PvE            # default value  
+    # EnableTrading: All                # default value
+    # EnableMaxBlockCount: True         # default value
+    # EnableVolumeWeight: False         # default value
+    # EnableCPUPoints: False            # default value
+    AutoMinerDepletion: False    
+    # GroundedStructureSpawn: True      # default value
+    TurretUndergroundCheck: True   
+    # OriginDefault: Neutral            # default value
+    # OriginAccessOthers: True          # default value
+    # OriginAutoAlliance: True          # default value
+    # MaxSpawnedEnemies: 60             # default value
+    DespawnEscapePod: True 
+    RegeneratePOIs: True               
+    # FOWTransparency: 0                # default value
+    # DSLUnloadSecs: 30                 # default value
+    # DSLDistancePlanet: 1200           # default value
+    # DSLDistanceSpace: 3000            # default value
+    # ForcePvP: False                   # default value
+    # OriginFactionStart: False         # default value
+    # ThrustersNeedOpenSpace: False     # default value
+
+    ### In local Coop, following parameter are ignored since they are taken from Difficulty Settings window ###
+    # FriendlyFireInPvP: True           # default value
+    # DiffEscapePodContent: Medium      # default value
+    # DiffPlayerProgression: Normal     # default value
+    # DiffDegradationSpeed: Normal      # default value
+    # DiffFoodConsumption: Normal       # default value
+    # DiffOxygenConsumption: Normal     # default value
+    # DiffRadiationTemperature: Normal  # default value
+    # DiffAmountOfOre: Normal           # default value
+    # DiffNumberOfDeposits: Normal      # default value
+    # DiffAttackStrength: Medium        # default value
+    # DiffEnemySpawnRate: Normal        # default value
+    # DiffDronePresence: Normal         # default value
+    # DiffDroneBaseAttack: Normal       # default value
+    # DiffConstrCraftTime: Normal       # default value
+    # DiffBpProdTime: Normal            # default value

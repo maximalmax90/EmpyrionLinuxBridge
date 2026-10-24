@@ -1,0 +1,1687 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  {{template "chat_color_vars" .ChatColors}}
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "overview" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content content-fill">
+        <div class="col-group-left">
+          <div class="row-top">
+            <div class="col col-main">
+              <section id="players-panel" class="panel">
+                <h2>{{t "players.heading"}} <span id="players-online-count" class="num-fixed">{{template "players_count_fragment" .Players}}</span></h2>
+                <div id="players-panel-inner">{{template "players_fragment" .Players}}</div>
+              </section>
+            </div>
+
+            <div class="col col-middle" id="middle-column" style="display:none">
+              <section class="panel middle-panel" id="middle-panel">
+                <div id="inventory-section"></div>
+              </section>
+            </div>
+          </div>
+
+          <section id="logs-panel" class="panel logs-panel">
+            <h2 class="logs-heading-row">
+              {{t "logs.heading"}}
+              <button type="button" class="logs-toggle nfi nfi-collapse-down" id="logs-toggle" title="{{t "logs.toggle"}}"></button>
+            </h2>
+            <div id="logs-panel-inner">{{template "logs_fragment" .}}</div>
+          </section>
+        </div>
+
+        <div class="col col-side">
+          <section id="chat-panel" class="panel">
+            <h2>{{t "chat.heading"}}</h2>
+            <div class="chat-filters">
+              <label><input type="checkbox" class="chat-filter" value="global" checked>{{t "chat.filter.global"}}</label>
+              <label><input type="checkbox" class="chat-filter" value="faction" checked>{{t "chat.filter.faction"}}</label>
+              <label><input type="checkbox" class="chat-filter" value="alliance" checked>{{t "chat.filter.alliance"}}</label>
+              <label><input type="checkbox" class="chat-filter" value="server" checked>{{t "chat.filter.server"}}</label>
+              <label><input type="checkbox" class="chat-filter" value="singleplayer" checked>{{t "chat.filter.singleplayer"}}</label>
+              <label><input type="checkbox" class="chat-filter" value="banner" checked>{{t "chat.filter.banner"}}</label>
+            </div>
+            <div class="chat-table-wrap">
+              <div id="chat-panel-inner">{{template "chat_fragment" .Chat}}</div>
+            </div>
+            <form id="composer-form" class="{{if .DaemonUnreachable}}daemon-blocked{{end}}" {{if .DaemonUnreachable}}inert{{end}} hx-post="/action/message" hx-target="#toast" hx-swap="innerHTML" hx-on::after-request="resetComposerText(); updateComposerVisibility();">
+              <div class="composer-toolbar">
+                <select name="type" id="composer-type" class="cmp-sm" onchange="updateComposerVisibility()" title="{{t "composer.type.title"}}">
+                  <option value="chat">{{t "composer.type.chat"}}</option>
+                  <option value="banner">{{t "composer.type.banner"}}</option>
+                </select>
+                <select name="channel" id="composer-channel" class="cmp-sm js-chat-only" onchange="updateComposerVisibility()" title="{{t "composer.channel.title"}}">
+                  <option value="global">{{t "composer.channel.global"}}</option>
+                  <option value="faction">{{t "composer.channel.faction"}}</option>
+                  {{if .AlliancesEnabled}}<option value="alliance">{{t "composer.channel.alliance"}}</option>{{end}}
+                  <option value="singleplayer">{{t "composer.channel.singleplayer"}}</option>
+                </select>
+                <select name="factionId" id="composer-faction" class="cmp-sm js-faction-picker" style="display:none" title="{{t "composer.faction.title"}}" required>
+                  <option value="">{{t "composer.faction.placeholder"}}</option>
+                  {{range .Factions}}<option value="{{.ID}}:{{.Abbreviation}}" title="{{.Name}}">{{.Abbreviation}}</option>{{end}}
+                </select>
+                {{if .AlliancesEnabled}}
+                <select name="allianceFactionIds" id="composer-alliance" class="cmp-sm js-alliance-picker" style="display:none" title="{{t "composer.alliance.title"}}" required>
+                  <option value="">{{t "composer.alliance.placeholder"}}</option>
+                  {{range .Alliances}}<option value="{{.Faction1Id}}:{{.Faction1Tag}},{{.Faction2Id}}:{{.Faction2Tag}}">{{.Faction1Tag}} + {{.Faction2Tag}}</option>{{end}}
+                </select>
+                {{end}}
+                <input type="text" name="recipientName" id="composer-recipient" class="cmp-sm js-chat-recipient" style="display:none" placeholder="{{t "composer.recipient.placeholder"}}" title="{{t "composer.recipient.title"}}" required>
+                <select name="priority" class="cmp-sm js-banner-only" style="display:none" title="{{t "composer.priority.title"}}">
+                  <option value="info">{{t "composer.priority.info"}}</option>
+                  <option value="message">{{t "composer.priority.message"}}</option>
+                  <option value="alarm">{{t "composer.priority.alarm"}}</option>
+                </select>
+                <input type="text" name="bannerRecipientName" id="composer-banner-recipient" class="cmp-sm js-banner-recipient" style="display:none" placeholder="{{t "composer.bannerRecipient.placeholder"}}" title="{{t "composer.bannerRecipient.title"}}">
+              </div>
+              <div class="composer-send-row">
+                <select name="asSteamId" class="cmp-sm js-chat-only" title="{{t "composer.asWho.title"}}">
+                  <option value="">{{t "composer.asWho.admin"}}</option>
+                  <option value="__server__">{{t "composer.asWho.server"}}</option>
+                  {{range .AdminIdentities}}<option value="{{.SteamId}}">{{.Name}}</option>{{end}}
+                </select>
+                <input type="text" name="text" placeholder="{{t "composer.text.placeholder"}}" required>
+                <button type="submit" class="nfi nfi-inline nfi-send" title="{{t "composer.send.title"}}"></button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <div id="modal-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box" id="modal-box">
+      <button type="button" class="modal-close-corner btn-icon nfi nfi-close" onclick="closeModal()" title="{{t "modal.cancel"}}"></button>
+      <h3 id="modal-title"></h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-small" onclick="closeModal()">{{t "modal.cancel"}}</button>
+        <button type="button" class="btn-small btn-primary" id="modal-confirm-btn">{{t "modal.confirm"}}</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    var I18N = {
+      kickTitle: {{t "player.modal.kickTitle"}},
+      banTitle: {{t "player.modal.banTitle"}},
+      muteTitle: {{t "player.modal.muteTitle"}},
+      unbanLabel: {{t "player.mod.unban"}},
+      unmuteLabel: {{t "player.mod.unmute"}},
+      durFor: {{t "player.modal.durFor"}},
+      durUntil: {{t "player.modal.durUntil"}},
+      durHours: {{t "player.modal.durHours"}},
+      durDays: {{t "player.modal.durDays"}},
+      durPermanent: {{t "player.modal.durPermanent"}},
+      durInvalid: {{t "player.modal.durInvalid"}},
+      requestError: {{t "common.requestError"}},
+      consoleSent: {{t "player.console.sent"}},
+
+      activateChapterTitle: {{t "player.console.activateChapter"}},
+      activateChapterWarning: {{t "player.console.activateChapterWarning"}},
+      activateChapterSearchPlaceholder: {{t "player.console.activateChapterSearchPlaceholder"}},
+      activateChapterConfirm: {{t "player.console.activateChapterConfirm"}},
+      activateChapterSent: {{t "player.console.activateChapterSent"}},
+      activateChapterNoResults: {{t "player.console.activateChapterNoResults"}},
+
+      structuresTitle: {{t "nav.structures"}},
+      confirmDestroy: {{t "structures.confirmDestroy"}},
+      factionModalTitle: {{t "structures.factionModalTitle"}},
+      factionModalLabel: {{t "structures.factionModalLabel"}},
+      refuelModalTitle: {{t "structures.refuelModalTitle"}},
+      refuelModalFuel: {{t "structures.refuelModalFuel"}},
+      refuelModalOxygen: {{t "structures.refuelModalOxygen"}},
+      refuelModalPentaxid: {{t "structures.refuelModalPentaxid"}},
+      moveModalTitle: {{t "structures.moveModalTitle"}},
+      moveModalMode: {{t "structures.moveModalMode"}},
+      restoreModalTitle: {{t "structures.restoreModalTitle"}},
+      restoreModalContainers: {{t "structures.restoreModalContainers"}},
+      restoreModalStructure: {{t "structures.restoreModalStructure"}},
+      restoreModalAll: {{t "structures.restoreModalAll"}},
+      restoreModalAllWarning: {{t "structures.restoreModalAllWarning"}},
+      restoreModalConfirm: {{t "structures.restoreModalConfirm"}},
+      restoreModalDate: {{t "structures.restoreModalDate"}},
+      restoreModalSnapshot: {{t "structures.restoreModalSnapshot"}},
+      restoreModalSnapshotLoading: {{t "structures.restoreModalSnapshotLoading"}},
+      restoreModalSnapshotNone: {{t "structures.restoreModalSnapshotNone"}},
+      restoreModalSnapshotSummary: {{t "structures.restoreModalSnapshotSummary"}},
+      restoreModalSnapshotBlocks: {{t "structures.restoreModalSnapshotBlocks"}},
+      restoreModalSnapshotFuel: {{t "structures.restoreModalSnapshotFuel"}},
+      restoreModalSnapshotOxygen: {{t "structures.restoreModalSnapshotOxygen"}},
+      restoreModalSnapshotPentaxid: {{t "structures.restoreModalSnapshotPentaxid"}},
+      restoreModalPositionLabel: {{t "structures.restoreModalPositionLabel"}},
+      restoreModalPositionSnapshot: {{t "structures.restoreModalPositionSnapshot"}},
+      restoreModalPositionPlayer: {{t "structures.restoreModalPositionPlayer"}},
+      restoreModalPositionPlayerLoading: {{t "structures.restoreModalPositionPlayerLoading"}},
+      structuresPageInfo: {{t "structures.pager.info"}},
+      blocksBreakdownTitle: {{t "structures.blocksBreakdownTitle"}},
+      blocksBreakdownBlocks: {{t "structures.blocksBreakdownBlocks"}},
+      blocksBreakdownDevices: {{t "structures.blocksBreakdownDevices"}},
+      blocksBreakdownEmpty: {{t "structures.blocksBreakdownEmpty"}},
+      blocksBreakdownAsOf: {{t "structures.blocksBreakdownAsOf"}},
+
+      warpTitle: {{t "player.modal.warpTitle"}},
+      warpModeCoords: {{t "player.modal.warpModeCoords"}},
+      warpModePlayer: {{t "player.modal.warpModePlayer"}},
+      warpModeStructure: {{t "player.modal.warpModeStructure"}},
+      warpModePlayerStructure: {{t "player.modal.warpModePlayerStructure"}},
+      warpPlayfield: {{t "player.modal.warpPlayfield"}},
+      warpRotation: {{t "player.modal.warpRotation"}},
+      warpZero: {{t "player.modal.warpZero"}},
+      warpEntityLabelPlayer: {{t "player.modal.warpEntityLabelPlayer"}},
+      warpEntityLabelStructure: {{t "player.modal.warpEntityLabelStructure"}},
+      warpOnline: {{t "players.status.online"}},
+      warpOffline: {{t "player.modal.warpOffline"}},
+
+      historyTitle: {{t "history.modal.title"}},
+      historyFrom: {{t "history.modal.from"}},
+      historyTo: {{t "history.modal.to"}},
+      historyDistance: {{t "history.modal.distance"}},
+      historyHideOnlyPos: {{t "history.modal.hideOnlyPos"}},
+      historyShow: {{t "history.modal.show"}},
+      historyLoading: {{t "history.modal.loading"}},
+      historyEmpty: {{t "history.modal.empty"}},
+      historyNew: {{t "history.modal.new"}},
+      historyDeleted: {{t "history.modal.deleted"}},
+      historyKindPlayer: {{t "history.modal.kindPlayer"}},
+      historyKindStructure: {{t "history.modal.kindStructure"}},
+      historyColTime: {{t "history.modal.colTime"}},
+      historyColKind: {{t "history.modal.colKind"}},
+      historyColName: {{t "history.modal.colName"}},
+      historyColPlayfield: {{t "history.modal.colPlayfield"}},
+      historyColDistance: {{t "history.modal.colDistance"}},
+      historyColChanges: {{t "history.modal.colChanges"}},
+      historyColCredits: {{t "history.modal.colCredits"}},
+      historyColKills: {{t "history.modal.colKills"}},
+      historyColDied: {{t "history.modal.colDied"}},
+      historyColExp: {{t "history.modal.colExp"}},
+      historyColFactionId: {{t "history.modal.colFactionId"}},
+      historyColFactionGroup: {{t "history.modal.colFactionGroup"}},
+      historyColBlocks: {{t "history.modal.colBlocks"}},
+      historyColDevices: {{t "history.modal.colDevices"}},
+      historyColTriangles: {{t "history.modal.colTriangles"}},
+      historyColLights: {{t "history.modal.colLights"}},
+      historyColPowered: {{t "history.modal.colPowered"}},
+      historyColFuel: {{t "history.modal.colFuel"}},
+      historyFilterPlayers: {{t "history.modal.filterPlayers"}},
+      historyFilterStructures: {{t "history.modal.filterStructures"}},
+      historyFilterNewStructures: {{t "history.modal.filterNewStructures"}},
+      historyFilterCharCreation: {{t "history.modal.filterCharCreation"}},
+      historyFilterWentOnline: {{t "history.modal.filterWentOnline"}},
+      historyFilterWentOffline: {{t "history.modal.filterWentOffline"}},
+      historyFilterRegular: {{t "history.modal.filterRegular"}},
+      historyFilterStructureDeleted: {{t "history.modal.filterStructureDeleted"}},
+      historyFilterPlayersGroup: {{t "history.modal.filterPlayersGroup"}},
+      historyFilterStructuresGroup: {{t "history.modal.filterStructuresGroup"}},
+      historyFilterAllPlayfields: {{t "history.modal.filterAllPlayfields"}},
+      historyFilterAllFactions: {{t "history.modal.filterAllFactions"}},
+      historyFilterFactionLabel: {{t "history.modal.filterFactionLabel"}},
+      historyFactionGroupFaction: {{t "history.modal.factionGroupFaction"}},
+      historyFactionGroupPlayer: {{t "history.modal.factionGroupPlayer"}},
+      historyFactionGroupNpc: {{t "history.modal.factionGroupNpc"}},
+      historyGroupAnchor: {{t "history.modal.groupAnchor"}},
+      historyGroupRange: {{t "history.modal.groupRange"}},
+      historyGroupEventTypes: {{t "history.modal.groupEventTypes"}},
+      historyGroupExtra: {{t "history.modal.groupExtra"}},
+      historyGroupDelta: {{t "history.modal.groupDelta"}},
+      historyFilterOnlyChanges: {{t "history.modal.filterOnlyChanges"}},
+      historyDeltaLabel: {{t "history.modal.deltaLabel"}},
+      historyDeltaValueLabel: {{t "history.modal.deltaValueLabel"}},
+      historyDeltaAny: {{t "history.modal.deltaAny"}},
+      historyEntityKindLabel: {{t "history.modal.entityKindLabel"}},
+      historyEntityKindAll: {{t "history.modal.entityKindAll"}},
+      historyEntityValueAllPlayers: {{t "history.modal.entityValueAllPlayers"}},
+      historyEntityValueAllStructures: {{t "history.modal.entityValueAllStructures"}},
+      historySystemLabel: {{t "history.modal.systemLabel"}},
+      historyFilterAllSystems: {{t "history.modal.filterAllSystems"}},
+      historyLimitLabel: {{t "history.modal.limitLabel"}},
+      historyPageInfo: {{t "history.modal.pageInfo"}},
+      modalCancel: {{t "modal.cancel"}},
+      modalConfirm: {{t "modal.confirm"}},
+
+      chatHistoryTitle: {{t "chatHistory.title"}},
+      chatHistoryGroupParticipants: {{t "chatHistory.groupParticipants"}},
+      chatHistoryPlayerLabel: {{t "chatHistory.playerLabel"}},
+      chatHistoryPlayerAll: {{t "chatHistory.playerAll"}},
+      chatHistoryChannelLabel: {{t "chatHistory.channelLabel"}},
+      chatHistoryChannelAll: {{t "chatHistory.channelAll"}},
+      chatHistoryTargetLabel: {{t "chatHistory.targetLabel"}},
+      chatHistoryTargetAll: {{t "chatHistory.targetAll"}},
+
+      chatChannelGlobal: {{t "channel.global"}},
+      chatChannelFaction: {{t "channel.faction"}},
+      chatChannelAlliance: {{t "channel.alliance"}},
+      chatChannelServer: {{t "channel.server"}},
+      chatChannelSingleplayer: {{t "channel.singleplayer"}},
+      chatChannelBanner: {{t "channel.banner"}},
+      bannerPriorityAlarm: {{t "composer.priority.alarm"}},
+      bannerPriorityMessage: {{t "composer.priority.message"}},
+      bannerPriorityInfo: {{t "composer.priority.info"}},
+
+      chatColTime: {{t "chat.col.time"}},
+      chatColChannel: {{t "chat.col.channel"}},
+      chatColPlayer: {{t "chat.col.player"}},
+      chatColMessage: {{t "chat.col.message"}},
+      chatEmpty: {{t "chat.empty"}},
+
+      backpackRestoreTitle: {{t "player.modal.backpackRestoreTitle"}},
+      backpackRestoreLoading: {{t "player.modal.backpackRestoreLoading"}},
+      backpackRestoreEmpty: {{t "player.modal.backpackRestoreEmpty"}},
+      backpackRestoreEmptyInv: {{t "player.modal.backpackRestoreEmptyInv"}},
+      backpackRestoreCurrent: {{t "player.modal.backpackRestoreCurrent"}},
+      backpackRestoreDate: {{t "player.modal.backpackRestoreDate"}},
+      backpackRestoreSnapshot: {{t "player.modal.backpackRestoreSnapshot"}},
+      backpackRestorePartTitle: {{t "player.modal.backpackRestorePartTitle"}},
+      backpackRestoreAll: {{t "player.modal.backpackRestoreAll"}},
+      labelToolbelt: {{t "inventory.toolbelt"}},
+      labelBag: {{t "inventory.bag"}},
+    };
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+
+    (function () {
+      var logsPanel = document.getElementById('logs-panel');
+      if (localStorage.getItem('elb_logs_collapsed') === '1') logsPanel.classList.add('collapsed');
+      document.getElementById('logs-toggle').addEventListener('click', function () {
+        logsPanel.classList.toggle('collapsed');
+        localStorage.setItem('elb_logs_collapsed', logsPanel.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+
+    var toastHideTimer = null;
+    function scheduleToastHide() {
+      clearTimeout(toastHideTimer);
+      toastHideTimer = setTimeout(function () {
+        document.getElementById('toast').innerHTML = '';
+      }, 4000);
+    }
+    document.body.addEventListener('htmx:afterSwap', function (evt) {
+      if (evt.detail.target && evt.detail.target.id === 'toast') scheduleToastHide();
+    });
+
+    function toggleFields(selector, show) {
+      document.querySelectorAll(selector).forEach(function (el) {
+        el.style.display = show ? '' : 'none';
+        el.disabled = !show;
+      });
+    }
+    function updateComposerVisibility() {
+      var isChat = document.getElementById('composer-type').value === 'chat';
+      var channel = document.getElementById('composer-channel').value;
+      toggleFields('.js-chat-only', isChat);
+      toggleFields('.js-banner-only', !isChat);
+      toggleFields('.js-faction-picker', isChat && channel === 'faction');
+      toggleFields('.js-alliance-picker', isChat && channel === 'alliance');
+      toggleFields('.js-chat-recipient', isChat && channel === 'singleplayer');
+      toggleFields('.js-banner-recipient', !isChat);
+    }
+    document.addEventListener('DOMContentLoaded', updateComposerVisibility);
+
+    function resetComposerText() {
+      var input = document.querySelector('#composer-form input[name="text"]');
+      if (input) input.value = '';
+    }
+
+    function targetPlayer(name) {
+      if (!name) return;
+      document.getElementById('composer-type').value = 'chat';
+      document.getElementById('composer-channel').value = 'singleplayer';
+      updateComposerVisibility();
+      var inp = document.getElementById('composer-recipient');
+      if (inp) inp.value = name;
+      var input = document.querySelector('#composer-form input[name="text"]');
+      if (input) input.focus();
+    }
+    function rowClickOk(evt) {
+      return !evt.target.closest('a, button, .clickable, .icon-btn, form');
+    }
+    function showInventoryPanel() {
+      var column = document.getElementById('middle-column');
+      var panel = document.getElementById('middle-panel');
+      column.style.display = 'flex';
+      panel.classList.add('panel-enter');
+      void panel.offsetWidth; 
+      panel.classList.remove('panel-enter');
+    }
+
+    var currentPlayerURL = null;
+    function rememberPlayer(tr) {
+      currentPlayerURL = tr.getAttribute('hx-get');
+      dirtyPlayerFields.clear();
+      syncPlayerOnlineGates();
+    }
+
+    function syncPlayerOnlineGates() {
+      if (!currentPlayerURL) return;
+      var steamId = new URLSearchParams(currentPlayerURL.split('?')[1]).get('steamId');
+      if (!steamId) return;
+      var row = document.querySelector('.players-table tr[data-steamid="' + CSS.escape(steamId) + '"]');
+      var online = !!row && row.classList.contains('online');
+
+      var consoleGroup = document.getElementById('console-group');
+      if (consoleGroup) consoleGroup.disabled = !online;
+
+      var gmivBtn = document.getElementById('gmiv-toggle');
+      if (gmivBtn) {
+        gmivBtn.disabled = !online;
+        if (!online) {
+          gmivBtn.dataset.active = '0';
+          gmivBtn.classList.remove('btn-active');
+        }
+      }
+    }
+    document.body.addEventListener('htmx:wsAfterMessage', syncPlayerOnlineGates);
+
+    function syncComposerDaemonGate() {
+      var form = document.getElementById('composer-form');
+      if (!form) return;
+      var badge = document.querySelector('.state-badge');
+      var unreachable = !!badge && badge.classList.contains('state-unreachable');
+      form.inert = unreachable;
+      form.classList.toggle('daemon-blocked', unreachable);
+    }
+    document.body.addEventListener('htmx:wsAfterMessage', syncComposerDaemonGate);
+
+    var PLAYERS_SORT_STORAGE_KEY = 'elb_players_sort';
+    function loadPlayersSort() {
+      try { return JSON.parse(localStorage.getItem(PLAYERS_SORT_STORAGE_KEY) || 'null'); }
+      catch (e) { return null; }
+    }
+    function savePlayersSort(sort) {
+      try { localStorage.setItem(PLAYERS_SORT_STORAGE_KEY, JSON.stringify(sort)); } catch (e) {}
+    }
+    function sortPlayersTable(key) {
+      var cur = loadPlayersSort();
+      var dir = (cur && cur.key === key && cur.dir === 'asc') ? 'desc' : 'asc';
+      savePlayersSort({ key: key, dir: dir });
+      applyPlayersSort();
+    }
+    function applyPlayersSort() {
+      var table = document.querySelector('#players-panel-inner .players-table');
+      if (!table) return;
+      var sort = loadPlayersSort();
+      table.querySelectorAll('thead th[data-key]').forEach(function (th) {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (sort && th.dataset.key === sort.key) th.classList.add(sort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+      });
+      if (!sort) return;
+      var th = table.querySelector('thead th[data-key="' + sort.key + '"]');
+      var isNum = !!th && th.dataset.sortType === 'num';
+      var tbody = table.querySelector('tbody');
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-steamid]'));
+      if (rows.length === 0) return;
+      var dirMul = sort.dir === 'asc' ? 1 : -1;
+      rows.sort(function (a, b) {
+        var cellA = a.querySelector('[data-key="' + sort.key + '"]');
+        var cellB = b.querySelector('[data-key="' + sort.key + '"]');
+        var rawA = cellA ? cellA.dataset.sort : '';
+        var rawB = cellB ? cellB.dataset.sort : '';
+        if (isNum) {
+          var emptyA = rawA === '', emptyB = rawB === '';
+          if (emptyA && emptyB) return 0;
+          if (emptyA) return 1;  
+          if (emptyB) return -1;
+          return (parseFloat(rawA) - parseFloat(rawB)) * dirMul;
+        }
+        return rawA.toLowerCase().localeCompare(rawB.toLowerCase()) * dirMul;
+      });
+      rows.forEach(function (row) { tbody.appendChild(row); });
+    }
+    document.body.addEventListener('htmx:wsAfterMessage', applyPlayersSort);
+    applyPlayersSort();
+
+    var dirtyPlayerFields = new Set();
+    ['input', 'change'].forEach(function (evt) {
+      document.addEventListener(evt, function (e) {
+        if (e.target.form && e.target.form.id === 'player-apply-form') {
+          dirtyPlayerFields.add(e.target.name);
+        } else if (e.target.id === 'vip-checkbox') {
+          dirtyPlayerFields.add('vip');
+        }
+      });
+    });
+
+    function refreshPlayerPanel() {
+      if (!currentPlayerURL) return;
+      fetch(currentPlayerURL).then(function (r) { return r.text(); }).then(function (html) {
+        var el = document.getElementById('inventory-section');
+        el.innerHTML = html;
+        dirtyPlayerFields.clear();
+        el.querySelectorAll('script').forEach(function (old) {
+          var s = document.createElement('script');
+          s.textContent = old.textContent;
+          old.replaceWith(s);
+        });
+      });
+    }
+
+    var modalSteamId = null, modalAction = null;
+    function showModal() { document.getElementById('modal-overlay').style.display = 'flex'; }
+    function closeModal() {
+      document.getElementById('modal-overlay').style.display = 'none';
+      hideItemTooltip();
+      document.getElementById('modal-box').classList.remove('wide', 'fullscreen', 'backpack-compare-box', 'blocks-breakdown-modal');
+      document.getElementById('modal-box').style.width = '';
+      document.getElementById('modal-confirm-btn').style.display = '';
+      var modalActions = document.querySelector('.modal-actions');
+      if (modalActions) modalActions.style.display = '';
+    }
+
+    function openKickModal(steamId, name) {
+      modalSteamId = steamId; modalAction = 'kick';
+      document.getElementById('modal-title').textContent = I18N.kickTitle.replace('{name}', name);
+      document.getElementById('modal-body').innerHTML = '';
+      document.getElementById('modal-confirm-btn').onclick = confirmKick;
+      showModal();
+    }
+    function confirmKick() {
+      fetch('/action/kick', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'steamId=' + encodeURIComponent(modalSteamId),
+      }).then(function (r) { return r.text(); }).then(function (html) {
+        document.getElementById('toast').innerHTML = html;
+        scheduleToastHide();
+        closeModal();
+        refreshPlayerPanel();
+      });
+    }
+
+    function openBackpackRestoreModal(entityId, steamId) {
+      document.getElementById('modal-title').textContent = I18N.backpackRestoreTitle;
+      document.getElementById('modal-body').innerHTML = '<div class="dim">' + I18N.backpackRestoreLoading + '</div>';
+      document.getElementById('modal-box').classList.add('backpack-compare-box');
+      showModal();
+      fetch('/action/player/backpack-history?steamId=' + encodeURIComponent(steamId))
+        .then(function (r) { return r.json(); })
+        .then(function (history) { renderBackpackRestoreModal(entityId, steamId, history); })
+        .catch(function () { document.getElementById('modal-body').innerHTML = '<div class="dim">' + I18N.requestError + '</div>'; });
+    }
+
+    function renderBackpackSection(container, label, items, onRestore) {
+      var section = document.createElement('div');
+      section.className = 'backpack-compare-section';
+      var head = document.createElement('div');
+      head.className = 'backpack-compare-section-head';
+      head.appendChild(document.createTextNode(label));
+      if (onRestore) {
+        var btn = document.createElement('span');
+        btn.className = 'icon-btn nfi nfi-refresh';
+        btn.title = I18N.backpackRestorePartTitle;
+        btn.onclick = onRestore;
+        head.appendChild(btn);
+      }
+      section.appendChild(head);
+      if (!items || !items.length) {
+        var empty = document.createElement('div');
+        empty.className = 'dim';
+        empty.textContent = I18N.backpackRestoreEmptyInv;
+        section.appendChild(empty);
+      } else {
+        var grid = document.createElement('div');
+        grid.className = 'slot-grid';
+        items.forEach(function (s) {
+          var name = itemIdToName[s.id] || '';
+          var cell = document.createElement('div');
+          cell.className = 'slot filled';
+          cell.title = (name || ('#' + s.id)) + ' ×' + s.count;
+          if (name) {
+            var img = document.createElement('img');
+            img.src = '/icon/' + encodeURIComponent(name);
+            img.alt = '';
+            img.onerror = function () { img.style.visibility = 'hidden'; };
+            cell.appendChild(img);
+          }
+          var count = document.createElement('span');
+          count.className = 'slot-count';
+          count.textContent = s.count;
+          cell.appendChild(count);
+          grid.appendChild(cell);
+        });
+        section.appendChild(grid);
+      }
+      container.appendChild(section);
+    }
+
+    function renderBackpackList(containerId, toolbelt, bag, onRestorePart) {
+      var container = document.getElementById(containerId);
+      container.innerHTML = '';
+      renderBackpackSection(container, I18N.labelToolbelt, toolbelt, onRestorePart ? function () { onRestorePart('toolbelt'); } : null);
+      renderBackpackSection(container, I18N.labelBag, bag, onRestorePart ? function () { onRestorePart('bag'); } : null);
+    }
+
+    function renderBackpackRestoreModal(entityId, steamId, history) {
+      var body = document.getElementById('modal-body');
+      body.innerHTML = '';
+      if (!history.length) {
+        body.innerHTML = '<div class="dim">' + I18N.backpackRestoreEmpty + '</div>';
+        document.getElementById('modal-confirm-btn').style.display = 'none';
+        return;
+      }
+
+      var byDate = {}; 
+      var dateKeys = [];
+      history.forEach(function (entry, i) {
+        var d = new Date(entry.timestamp);
+        var key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+        if (!byDate[key]) { byDate[key] = []; dateKeys.push(key); }
+        byDate[key].push(i);
+      });
+
+      var dateSelect = document.createElement('select');
+      dateKeys.forEach(function (key) {
+        var opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = new Date(history[byDate[key][0]].timestamp).toLocaleDateString();
+        dateSelect.appendChild(opt);
+      });
+      dateSelect.value = dateKeys[dateKeys.length - 1]; 
+      var dateLabel = document.createElement('label');
+      dateLabel.appendChild(document.createTextNode(I18N.backpackRestoreDate));
+      dateLabel.appendChild(dateSelect);
+
+      var select = document.createElement('select');
+      function populateTimeOptions() {
+        select.innerHTML = '';
+        byDate[dateSelect.value].forEach(function (i) {
+          var opt = document.createElement('option');
+          opt.value = String(i);
+          opt.textContent = new Date(history[i].timestamp).toLocaleTimeString();
+          select.appendChild(opt);
+        });
+        var idxs = byDate[dateSelect.value];
+        select.value = String(idxs[idxs.length - 1]); 
+      }
+      populateTimeOptions();
+      var label = document.createElement('label');
+      label.appendChild(document.createTextNode(I18N.backpackRestoreSnapshot));
+      label.appendChild(select);
+
+      var dateTimeRow = document.createElement('div');
+      dateTimeRow.className = 'task-form';
+      dateTimeRow.appendChild(dateLabel);
+      dateTimeRow.appendChild(label);
+      body.appendChild(dateTimeRow);
+
+      dateSelect.addEventListener('change', function () { populateTimeOptions(); showSelected(); });
+
+      var cols = document.createElement('div');
+      cols.className = 'backpack-compare';
+      cols.innerHTML =
+        '<div><h4>' + I18N.backpackRestoreCurrent + '</h4><div id="backpack-restore-current"></div></div>' +
+        '<div><h4>' + I18N.backpackRestoreSnapshot + '</h4><div id="backpack-restore-snapshot"></div></div>';
+      body.appendChild(cols);
+
+      function restorePart(part) {
+        var entry = history[parseInt(select.value, 10)];
+        fetch('/action/player/backpack-restore', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ steamId: steamId, playerId: entityId, timestamp: entry.timestamp, part: part }),
+        }).then(function (r) { return r.text(); }).then(function (html) {
+          document.getElementById('toast').innerHTML = html;
+          scheduleToastHide();
+          closeModal();
+          refreshPlayerPanel();
+        });
+      }
+
+      renderBackpackList('backpack-restore-current', invToolbelt, invBag);
+      function showSelected() {
+        var entry = history[parseInt(select.value, 10)];
+        renderBackpackList('backpack-restore-snapshot', entry.toolbelt, entry.bag, restorePart);
+      }
+      select.addEventListener('change', showSelected);
+      showSelected();
+
+      var confirmBtn = document.getElementById('modal-confirm-btn');
+      confirmBtn.textContent = I18N.backpackRestoreAll;
+      confirmBtn.style.display = '';
+      confirmBtn.onclick = function () { restorePart(''); };
+    }
+
+    var warpTargetsCache = null, warpEntityId = null, warpSteamId = null;
+
+    function openWarpModal(entityId, steamId, name) {
+      warpEntityId = entityId; warpSteamId = steamId;
+      document.getElementById('modal-title').textContent = I18N.warpTitle.replace('{name}', name);
+      document.getElementById('modal-box').classList.add('wide');
+      document.getElementById('modal-body').innerHTML =
+        '<div class="mod-row">' +
+          '<select id="warp-target-mode">' +
+            '<option value="coords">' + I18N.warpModeCoords + '</option>' +
+            '<option value="player">' + I18N.warpModePlayer + '</option>' +
+            '<option value="structure">' + I18N.warpModeStructure + '</option>' +
+            '<option value="player-structure">' + I18N.warpModePlayerStructure + '</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="mod-row" id="warp-entity-row" style="display:none">' +
+          '<span class="mod-label" id="warp-entity-label"></span>' +
+          '<select id="warp-entity-select"></select>' +
+        '</div>' +
+        '<div class="mod-row" id="warp-playfield-row" style="display:none">' +
+          '<span class="mod-label">' + I18N.warpPlayfield + '</span>' +
+          '<select id="warp-playfield"></select>' +
+        '</div>' +
+        '<div class="mod-row" id="warp-structure2-row" style="display:none">' +
+          '<span class="mod-label">' + I18N.warpEntityLabelStructure + '</span>' +
+          '<select id="warp-structure2-select"></select>' +
+        '</div>' +
+        '<div class="mod-row">' +
+          '<span class="mod-label">X/Y/Z</span>' +
+          '<input type="number" id="warp-x" step="any" value="0" class="dur-input warp-coord-input">' +
+          '<input type="number" id="warp-y" step="any" value="0" class="dur-input warp-coord-input">' +
+          '<input type="number" id="warp-z" step="any" value="0" class="dur-input warp-coord-input">' +
+          '<button type="button" class="btn-small" id="warp-zero-pos" onclick="zeroWarpPos()">' + I18N.warpZero + '</button>' +
+        '</div>' +
+        '<div class="mod-row">' +
+          '<span class="mod-label">' + I18N.warpRotation + '</span>' +
+          '<input type="number" id="warp-rotx" step="any" value="0" class="dur-input warp-coord-input">' +
+          '<input type="number" id="warp-roty" step="any" value="0" class="dur-input warp-coord-input">' +
+          '<input type="number" id="warp-rotz" step="any" value="0" class="dur-input warp-coord-input">' +
+          '<button type="button" class="btn-small" id="warp-zero-rot" onclick="zeroWarpRot()">' + I18N.warpZero + '</button>' +
+        '</div>';
+      document.getElementById('warp-target-mode').addEventListener('change', onWarpModeChange);
+      document.getElementById('warp-playfield').addEventListener('change', onWarpPlayfieldChange);
+      document.getElementById('warp-entity-select').addEventListener('change', onWarpEntityChange);
+      document.getElementById('warp-structure2-select').addEventListener('change', onWarpStructure2Change);
+      document.getElementById('modal-confirm-btn').onclick = confirmWarp;
+      showModal();
+      loadWarpTargets();
+    }
+
+    function loadWarpTargets() {
+      if (warpTargetsCache) { onWarpModeChange(); return; }
+      fetch('/action/warp/targets').then(function (r) { return r.json(); }).then(function (data) {
+        warpTargetsCache = data;
+        onWarpModeChange();
+      });
+    }
+
+    function warpUniqueSorted(values) {
+      var seen = {}, out = [];
+      values.forEach(function (v) {
+        if (v && !seen[v]) { seen[v] = true; out.push(v); }
+      });
+      out.sort();
+      return out;
+    }
+
+    function warpPopulateSelect(select, values) {
+      select.innerHTML = '';
+      values.forEach(function (v) {
+        var opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        select.appendChild(opt);
+      });
+    }
+
+    function warpPopulatePlayerSelect(select, players) {
+      select.innerHTML = '';
+      players.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p.steamId;
+        opt.textContent = p.name + ' (' + (p.online ? I18N.warpOnline : I18N.warpOffline) + ', ' + p.playfield + ')';
+        select.appendChild(opt);
+      });
+    }
+
+    function warpPopulateStructureSelect(select, structures) {
+      select.innerHTML = '';
+      structures.forEach(function (s) {
+        var opt = document.createElement('option');
+        opt.value = String(s.id);
+        opt.textContent = s.name + ' #' + s.id;
+        select.appendChild(opt);
+      });
+    }
+
+    function onWarpModeChange() {
+      var mode = document.getElementById('warp-target-mode').value;
+      var entityRow = document.getElementById('warp-entity-row');
+      var entityLabel = document.getElementById('warp-entity-label');
+      var pfRow = document.getElementById('warp-playfield-row');
+      var struct2Row = document.getElementById('warp-structure2-row');
+
+      entityRow.style.display = mode === 'coords' ? 'none' : '';
+      pfRow.style.display = (mode === 'coords' || mode === 'structure') ? '' : 'none';
+      struct2Row.style.display = 'none';
+
+      if (!warpTargetsCache) return;
+      setWarpCoordsDisabled(mode !== 'coords');
+
+      if (mode === 'coords') {
+        warpPopulateSelect(document.getElementById('warp-playfield'), warpTargetsCache.playfields || []);
+        var self = (warpTargetsCache.players || []).filter(function (p) { return p.steamId === warpSteamId; })[0];
+        if (self) {
+          if (self.playfield) document.getElementById('warp-playfield').value = self.playfield;
+          warpApplyPosRot(self);
+        }
+      } else if (mode === 'player' || mode === 'player-structure') {
+        entityLabel.textContent = I18N.warpEntityLabelPlayer;
+        warpPopulateSelect(document.getElementById('warp-playfield'), warpTargetsCache.playfields || []);
+        warpPopulatePlayerSelect(document.getElementById('warp-entity-select'), warpTargetsCache.players || []);
+        onWarpEntityChange();
+      } else if (mode === 'structure') {
+        entityLabel.textContent = I18N.warpEntityLabelStructure;
+        warpPopulateSelect(document.getElementById('warp-playfield'), warpUniqueSorted((warpTargetsCache.structures || []).map(function (s) { return s.playfield; })));
+        onWarpPlayfieldChange();
+      }
+    }
+
+    function onWarpPlayfieldChange() {
+      var mode = document.getElementById('warp-target-mode').value;
+      if (!warpTargetsCache) return;
+      var pf = document.getElementById('warp-playfield').value;
+      if (mode === 'structure') {
+        var filtered = (warpTargetsCache.structures || []).filter(function (s) { return s.playfield === pf; });
+        warpPopulateStructureSelect(document.getElementById('warp-entity-select'), filtered);
+        onWarpEntityChange();
+      } else if (mode === 'player-structure') {
+        var ownerId = warpSelectedPlayerEntityId();
+        var filteredS = (warpTargetsCache.structures || []).filter(function (s) { return s.playfield === pf && s.ownerEntityId === ownerId; });
+        document.getElementById('warp-structure2-row').style.display = filteredS.length ? '' : 'none';
+        warpPopulateStructureSelect(document.getElementById('warp-structure2-select'), filteredS);
+        onWarpStructure2Change();
+      }
+    }
+
+    function warpSelectedPlayerEntityId() {
+      var steamId = document.getElementById('warp-entity-select').value;
+      var match = (warpTargetsCache.players || []).filter(function (p) { return p.steamId === steamId; })[0];
+      return match ? match.entityId : NaN;
+    }
+
+    function onWarpEntityChange() {
+      var mode = document.getElementById('warp-target-mode').value;
+      if (mode === 'coords' || !warpTargetsCache) return;
+
+      if (mode === 'player') {
+        var val = document.getElementById('warp-entity-select').value;
+        var match = (warpTargetsCache.players || []).filter(function (p) { return p.steamId === val; })[0];
+        if (match) {
+          document.getElementById('warp-playfield').value = match.playfield;
+          warpApplyPosRot(match);
+        }
+        return;
+      }
+
+      if (mode === 'player-structure') {
+        var ownerId = warpSelectedPlayerEntityId();
+        var pfRow = document.getElementById('warp-playfield-row');
+        var pfs = warpUniqueSorted((warpTargetsCache.structures || [])
+          .filter(function (s) { return s.ownerEntityId === ownerId; })
+          .map(function (s) { return s.playfield; }));
+        if (pfs.length === 0) {
+          pfRow.style.display = 'none';
+          document.getElementById('warp-structure2-row').style.display = 'none';
+          return;
+        }
+        pfRow.style.display = '';
+        warpPopulateSelect(document.getElementById('warp-playfield'), pfs);
+        onWarpPlayfieldChange();
+        return;
+      }
+
+      if (mode === 'structure') {
+        var val2 = document.getElementById('warp-entity-select').value;
+        var match2 = (warpTargetsCache.structures || []).filter(function (s) { return String(s.id) === val2; })[0];
+        if (match2) warpApplyPosRot(match2);
+      }
+    }
+
+    function onWarpStructure2Change() {
+      var mode = document.getElementById('warp-target-mode').value;
+      if (mode !== 'player-structure' || !warpTargetsCache) return;
+      var val = document.getElementById('warp-structure2-select').value;
+      var match = (warpTargetsCache.structures || []).filter(function (s) { return String(s.id) === val; })[0];
+      if (match) {
+        document.getElementById('warp-playfield').value = match.playfield;
+        warpApplyPosRot(match);
+      }
+    }
+
+    function warpApplyPosRot(match) {
+      if (!match || !match.pos) return;
+      document.getElementById('warp-x').value = match.pos.x;
+      document.getElementById('warp-y').value = match.pos.y;
+      document.getElementById('warp-z').value = match.pos.z;
+      var rot = match.rot || { x: 0, y: 0, z: 0 };
+      document.getElementById('warp-rotx').value = rot.x;
+      document.getElementById('warp-roty').value = rot.y;
+      document.getElementById('warp-rotz').value = rot.z;
+    }
+
+    function setWarpCoordsDisabled(disabled) {
+      ['warp-x', 'warp-y', 'warp-z', 'warp-rotx', 'warp-roty', 'warp-rotz'].forEach(function (id) {
+        document.getElementById(id).disabled = disabled;
+      });
+      document.getElementById('warp-zero-pos').disabled = disabled;
+      document.getElementById('warp-zero-rot').disabled = disabled;
+    }
+
+    function zeroWarpPos() {
+      document.getElementById('warp-x').value = 0;
+      document.getElementById('warp-y').value = 0;
+      document.getElementById('warp-z').value = 0;
+    }
+    function zeroWarpRot() {
+      document.getElementById('warp-rotx').value = 0;
+      document.getElementById('warp-roty').value = 0;
+      document.getElementById('warp-rotz').value = 0;
+    }
+
+    function confirmWarp() {
+      var body = new URLSearchParams({
+        entityId: warpEntityId,
+        steamId: warpSteamId,
+        playfield: document.getElementById('warp-playfield').value,
+        x: document.getElementById('warp-x').value,
+        y: document.getElementById('warp-y').value,
+        z: document.getElementById('warp-z').value,
+        rotX: document.getElementById('warp-rotx').value,
+        rotY: document.getElementById('warp-roty').value,
+        rotZ: document.getElementById('warp-rotz').value,
+      });
+      fetch('/action/player/teleport', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString(),
+      }).then(function (r) { return r.text(); }).then(function (html) {
+        document.getElementById('toast').innerHTML = html;
+        scheduleToastHide();
+        closeModal();
+      });
+    }
+
+    function finishFactory(entityId) {
+      fetch('/action/player/factory-finish', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'entityId=' + encodeURIComponent(entityId),
+      }).then(function (r) { return r.text(); }).then(function (html) {
+        document.getElementById('toast').innerHTML = html;
+        scheduleToastHide();
+        setTimeout(refreshPlayerPanel, 3500);
+      });
+    }
+
+    function openBanMuteModal(action, steamId, name, active) {
+      modalSteamId = steamId; modalAction = action;
+      document.getElementById('modal-title').textContent = (action === 'ban' ? I18N.banTitle : I18N.muteTitle).replace('{name}', name);
+      var liftHtml = '';
+      if (active) {
+        liftHtml = '<div class="modal-lift-row"><button type="button" class="btn-small btn-danger" onclick="liftBanMute()">' +
+          (action === 'ban' ? I18N.unbanLabel : I18N.unmuteLabel) + '</button></div><hr class="modal-sep">';
+      }
+      document.getElementById('modal-body').innerHTML = liftHtml +
+        '<div class="dur-mode">' +
+          '<label><input type="radio" name="dur-mode" value="for" checked onchange="toggleDurMode()"> ' + I18N.durFor + '</label>' +
+          '<label><input type="radio" name="dur-mode" value="until" onchange="toggleDurMode()"> ' + I18N.durUntil + '</label>' +
+        '</div>' +
+        '<div id="dur-for">' +
+          '<input type="number" id="modal-dur-value" min="1" value="1" class="dur-input">' +
+          '<select id="modal-dur-unit"><option value="h">' + I18N.durHours + '</option><option value="d" selected>' + I18N.durDays + '</option></select>' +
+          '<label class="dur-permanent"><input type="checkbox" id="modal-dur-permanent" onchange="var d=this.checked;document.getElementById(\'modal-dur-value\').disabled=d;document.getElementById(\'modal-dur-unit\').disabled=d;"> ' + I18N.durPermanent + '</label>' +
+        '</div>' +
+        '<div id="dur-until" style="display:none"><input type="datetime-local" id="modal-dur-until"></div>';
+      document.getElementById('modal-confirm-btn').onclick = confirmBanMute;
+      showModal();
+    }
+    function toggleDurMode() {
+      var mode = document.querySelector('input[name="dur-mode"]:checked').value;
+      document.getElementById('dur-for').style.display = mode === 'for' ? '' : 'none';
+      document.getElementById('dur-until').style.display = mode === 'until' ? '' : 'none';
+    }
+    function composeModalDuration() {
+      var mode = document.querySelector('input[name="dur-mode"]:checked').value;
+      if (mode === 'for') {
+        if (document.getElementById('modal-dur-permanent').checked) return '36500d';
+        var v = document.getElementById('modal-dur-value').value || '1';
+        var u = document.getElementById('modal-dur-unit').value;
+        return v + u;
+      }
+      var target = document.getElementById('modal-dur-until').value;
+      if (!target) return null;
+      var ms = new Date(target).getTime() - Date.now();
+      if (ms <= 0) return null;
+      return Math.ceil(ms / 3600000) + 'h';
+    }
+    function confirmBanMute() {
+      var duration = composeModalDuration();
+      if (!duration) { alert(I18N.durInvalid); return; }
+      var path = modalAction === 'ban' ? '/action/player/ban' : '/action/player/mute';
+      fetch(path, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'steamId=' + encodeURIComponent(modalSteamId) + '&duration=' + encodeURIComponent(duration),
+      }).then(function (r) { return r.text(); }).then(function (html) {
+        document.getElementById('toast').innerHTML = html;
+        scheduleToastHide();
+        closeModal();
+        refreshPlayerPanel();
+      });
+    }
+    function liftBanMute() {
+      var path = modalAction === 'ban' ? '/action/player/unban' : '/action/player/unmute';
+      fetch(path, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'steamId=' + encodeURIComponent(modalSteamId),
+      }).then(function (r) { return r.text(); }).then(function (html) {
+        document.getElementById('toast').innerHTML = html;
+        scheduleToastHide();
+        closeModal();
+        refreshPlayerPanel();
+      });
+    }
+
+    function healPlayer() {
+      var form = document.getElementById('player-apply-form');
+      if (!form) return;
+      var healed = false;
+      ['health', 'food', 'oxygen', 'stamina'].forEach(function (stat) {
+        var cur = form.querySelector('[name="' + stat + '"]');
+        var max = form.querySelector('[name="' + stat + 'Max"]');
+        if (cur && max && max.value !== '') {
+          cur.value = max.value;
+          dirtyPlayerFields.add(stat);
+          healed = true;
+        }
+      });
+      var radiation = form.querySelector('[name="radiation"]');
+      if (radiation) {
+        radiation.value = '0';
+        dirtyPlayerFields.add('radiation');
+        healed = true;
+      }
+      var bodyTemp = form.querySelector('[name="bodyTemp"]');
+      if (bodyTemp) {
+        bodyTemp.value = '30';
+        dirtyPlayerFields.add('bodyTemp');
+        healed = true;
+      }
+      if (healed) applyPlayerChanges();
+      if (form.dataset.online === '1') {
+        var steamId = form.querySelector('[name="steamId"]').value;
+        fetch('/action/player/remoteex', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'steamId=' + encodeURIComponent(steamId) + '&command=' + encodeURIComponent('se -rma'),
+        });
+      }
+    }
+
+    function applyPlayerChanges() {
+      var container = document.getElementById('player-apply-form');
+      var raw = new FormData(container);
+
+      var factionTouched = dirtyPlayerFields.has('factionId') || dirtyPlayerFields.has('factionRole');
+      var fd = new URLSearchParams();
+      fd.set('entityId', raw.get('entityId'));
+      fd.set('steamId', raw.get('steamId'));
+      raw.forEach(function (v, k) {
+        if (k === 'entityId' || k === 'steamId') return;
+        if (k === 'factionGroup') { if (factionTouched) fd.set(k, v); return; }
+        if (dirtyPlayerFields.has(k)) fd.set(k, v);
+      });
+
+      var expEl = document.getElementById('exp-delta');
+      var expDelta = expEl ? (parseInt(expEl.value, 10) || 0) : 0;
+      if (expDelta) {
+        var known = parseInt(expEl.dataset.current || '0', 10) || 0;
+        fd.set('experiencePoints', String(known + expDelta));
+      }
+
+      var hasSetInfo = false;
+      fd.forEach(function (v, k) { if (k !== 'entityId' && k !== 'steamId') hasSetInfo = true; });
+
+      var requests = [];
+      if (hasSetInfo) {
+        requests.push(fetch('/action/player/setinfo', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: fd.toString(),
+        }));
+      }
+
+      var creditsEl = document.getElementById('credits-delta');
+      var creditsDelta = creditsEl ? (parseFloat(creditsEl.value) || 0) : 0;
+      if (creditsDelta) {
+        var cfd = new URLSearchParams();
+        cfd.set('entityId', raw.get('entityId'));
+        cfd.set('steamId', raw.get('steamId'));
+        cfd.set('amount', String(creditsDelta));
+        requests.push(fetch('/action/player/addcredits', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: cfd.toString(),
+        }));
+      }
+
+      var vipEl = document.getElementById('vip-checkbox');
+      if (vipEl && dirtyPlayerFields.has('vip')) {
+        var vfd = new URLSearchParams();
+        vfd.set('steamId', raw.get('steamId'));
+        if (vipEl.checked) vfd.set('vip', 'on');
+        requests.push(fetch('/action/player/vip', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: vfd.toString(),
+        }));
+      }
+
+      if (invDirty) requests.push(inventoryFetch());
+
+      if (!requests.length) return;
+      setInventoryLocked(true);
+      Promise.all(requests)
+        .then(function (responses) { return Promise.all(responses.map(function (r) { return r.text(); })); })
+        .then(function (texts) {
+          document.getElementById('toast').innerHTML = texts.join('');
+          scheduleToastHide();
+          if (expEl) expEl.value = 0;
+          if (creditsEl) creditsEl.value = 0;
+          dirtyPlayerFields.clear();
+          invDirty = false;
+          setTimeout(refreshPlayerPanel, 3500);
+        })
+        .catch(function () {
+          setInventoryLocked(false);
+        });
+    }
+
+    var SLOT_I18N = {
+      edit: {{t "player.slot.edit"}},
+      itemName: {{t "player.slot.itemName"}},
+      count: {{t "player.slot.count"}},
+      unknown: {{t "player.slot.unknownItem"}},
+      delConfirm: {{t "player.slot.deleteConfirm"}},
+      add: {{t "player.slot.add"}},
+      noResults: {{t "player.slot.noResults"}},
+      allCategories: {{t "player.slot.allCategories"}},
+      noCategory: {{t "player.slot.noCategory"}},
+      addAmmo: {{t "player.slot.addAmmo"}},
+      addAmmoNoSlot: {{t "player.slot.addAmmoNoSlot"}}
+    };
+    var CATEGORY_LABELS = {
+      'Weapons/Items': {{t "player.slot.category.Weapons/Items"}},
+      'Food': {{t "player.slot.category.Food"}},
+      'Medical': {{t "player.slot.category.Medical"}},
+      'Ingredients': {{t "player.slot.category.Ingredients"}},
+      'Components': {{t "player.slot.category.Components"}},
+      'Devices': {{t "player.slot.category.Devices"}},
+      'BuildingBlocks': {{t "player.slot.category.BuildingBlocks"}},
+      'Deco Blocks': {{t "player.slot.category.Deco Blocks"}}
+    };
+    function categoryLabel(raw) { return CATEGORY_LABELS[raw] || raw; }
+
+
+    var invEntityId = null;
+    var invSteamId = null;
+    var invToolbelt = [];
+    var invBag = [];
+    var invBaselineToolbelt = [];
+    var invBaselineBag = [];
+    var invDirty = false;
+    var invPendingActive = false;
+    var invBeforeToolbelt = [];
+    var invBeforeBag = [];
+    var invEditable = false;
+    var itemNameToId = {};
+    var itemIdToName = {};
+    var itemStackSizes = {};
+    var itemCategories = {};   
+    var itemAmmoTypes = {};    
+    var itemDisplayNames = {}; 
+    var itemDescriptions = {}; 
+    var pickerCategories = []; 
+    var pickerCategory = 'ALL'; 
+    var slotModalKind = null, slotModalIdx = null;
+    var slotPickedId = null, slotPickedName = null;
+
+    function initInventoryEditor(entityId, steamId, toolbelt, bag, nameToId, stackSizes, categories, ammoTypes, editable, pending, beforeToolbelt, beforeBag, factoryResources, displayNames, descriptions) {
+      invEntityId = entityId;
+      invSteamId = steamId;
+      invToolbelt = toolbelt || [];
+      invBag = bag || [];
+      invPendingActive = !!pending;
+      invBeforeToolbelt = beforeToolbelt || [];
+      invBeforeBag = beforeBag || [];
+      invBaselineToolbelt = JSON.parse(JSON.stringify(invToolbelt));
+      invBaselineBag = JSON.parse(JSON.stringify(invBag));
+      itemNameToId = nameToId || {};
+      itemStackSizes = stackSizes || {};
+      itemCategories = categories || {};
+      itemAmmoTypes = ammoTypes || {};
+      itemDisplayNames = displayNames || {};
+      itemDescriptions = descriptions || {};
+      invEditable = !!editable;
+      itemIdToName = {};
+      for (var n in itemNameToId) itemIdToName[itemNameToId[n]] = n;
+
+      var seen = {};
+      pickerCategories = [];
+      for (var nameKey in itemCategories) {
+        var cat = itemCategories[nameKey];
+        if (!seen[cat]) { seen[cat] = true; pickerCategories.push(cat); }
+      }
+      pickerCategories.sort(function (a, b) { return categoryLabel(a).localeCompare(categoryLabel(b), 'ru'); });
+
+      renderInventoryGrids();
+      renderFactoryResources(factoryResources);
+    }
+
+    function renderFactoryResources(resources) {
+      var container = document.getElementById('factory-resources');
+      var wrap = document.getElementById('factory-resources-wrap');
+      if (!container) return;
+      hideItemTooltip(); 
+      applyItemDarkBg(container);
+      container.innerHTML = '';
+      var entries = [];
+      for (var id in (resources || {})) {
+        var count = resources[id];
+        if (!count) continue;
+        entries.push({ name: itemIdToName[id] || ('#' + id), count: count });
+      }
+      if (wrap) wrap.style.display = entries.length ? '' : 'none';
+      entries.sort(function (a, b) { return a.name.localeCompare(b.name, 'ru'); });
+      entries.forEach(function (e) {
+        var row = document.createElement('div');
+        row.className = 'factory-resource-row';
+        var img = document.createElement('img');
+        img.src = '/icon/' + encodeURIComponent(e.name);
+        img.alt = '';
+        img.onerror = function () { this.style.visibility = 'hidden'; };
+        row.appendChild(img);
+        var label = document.createElement('span');
+        label.innerHTML = itemDisplayHtml(itemDisplayNames, e.name);
+        label.appendChild(document.createTextNode(' ×' + (Math.round(e.count * 100) / 100)));
+        row.appendChild(label);
+        attachItemTooltip(row, itemDescriptions, e.name);
+        container.appendChild(row);
+      });
+    }
+
+    function currentSlotList(kind) { return kind === 'toolbelt' ? invToolbelt : invBag; }
+
+    function fixedSlotsJS(stacks, n) {
+      var out = new Array(n).fill(null);
+      stacks.forEach(function (s) {
+        if (s.slotIdx >= 0 && s.slotIdx < n) out[s.slotIdx] = s;
+      });
+      return out;
+    }
+
+    function slotsEqual(a, b) {
+      if (!a && !b) return true;
+      if (!a || !b) return false;
+      return a.id === b.id && a.count === b.count;
+    }
+
+    function buildSlotCell(kind, idx, s, beforeS) {
+      var cell = document.createElement('div');
+      cell.className = 'slot' + (s ? ' filled' : '') + (invPendingActive && !slotsEqual(s, beforeS) ? ' slot-pending' : '');
+      if (s) {
+        var name = itemIdToName[s.id] || '';
+        cell.title = (name || ('#' + s.id)) + ' ×' + s.count;
+        if (name) {
+          var img = document.createElement('img');
+          img.src = '/icon/' + encodeURIComponent(name);
+          img.alt = '';
+          img.onerror = function () { img.style.visibility = 'hidden'; };
+          cell.appendChild(img);
+        }
+        var count = document.createElement('span');
+        count.className = 'slot-count';
+        count.textContent = s.count;
+        cell.appendChild(count);
+        if (invEditable) {
+          var actions = document.createElement('div');
+          actions.className = 'slot-actions';
+          var editBtn = document.createElement('button');
+          editBtn.type = 'button'; editBtn.className = 'slot-btn nfi nfi-pencil'; editBtn.title = SLOT_I18N.edit;
+          editBtn.addEventListener('click', function (e) { e.stopPropagation(); openSlotModal(kind, idx, s.id, s.count); });
+          var delBtn = document.createElement('button');
+          delBtn.type = 'button'; delBtn.className = 'slot-btn nfi nfi-close'; delBtn.title = SLOT_I18N.delConfirm;
+          delBtn.addEventListener('click', function (e) { e.stopPropagation(); openDeleteSlotModal(kind, idx, name); });
+          actions.appendChild(editBtn);
+          actions.appendChild(delBtn);
+          cell.appendChild(actions);
+        }
+      } else if (invEditable) {
+        var addBtn = document.createElement('button');
+        addBtn.type = 'button'; addBtn.className = 'slot-add nfi nfi-plus'; addBtn.title = SLOT_I18N.add;
+        addBtn.addEventListener('click', function () { openSlotModal(kind, idx, 0, 1); });
+        cell.appendChild(addBtn);
+      }
+      return cell;
+    }
+
+    function renderSlotGrid(containerId, kind, stacks, n, beforeStacks) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '';
+      var beforeFixed = fixedSlotsJS(beforeStacks || [], n);
+      fixedSlotsJS(stacks, n).forEach(function (s, i) {
+        container.appendChild(buildSlotCell(kind, i, s, beforeFixed[i]));
+      });
+    }
+
+    function renderInventoryGrids() {
+      renderSlotGrid('toolbelt-grid', 'toolbelt', invToolbelt, 9, invBeforeToolbelt);
+      renderSlotGrid('bag-grid', 'bag', invBag, 40, invBeforeBag);
+    }
+
+    function openSlotModal(kind, idx, currentId, currentCount) {
+      slotModalKind = kind; slotModalIdx = idx;
+      slotPickedId = currentId || null;
+      slotPickedName = slotPickedId ? (itemIdToName[slotPickedId] || null) : null;
+      pickerCategory = 'ALL'; 
+
+      document.getElementById('modal-title').textContent = SLOT_I18N.edit;
+      document.getElementById('modal-box').classList.add('wide');
+      document.getElementById('modal-body').innerHTML =
+        '<div id="slot-category-tabs" class="item-cat-tabs"></div>' +
+        '<input type="text" id="slot-item-search" class="item-picker-search" placeholder="' + SLOT_I18N.itemName + '" autocomplete="off">' +
+        '<div id="slot-item-list" class="item-picker-list"></div>' +
+        '<div class="slot-modal-field">' +
+          '<label>' + SLOT_I18N.count + '</label>' +
+          '<input type="number" id="slot-item-count" min="1" value="' + (currentCount || 1) + '">' +
+        '</div>' +
+        '<div id="slot-item-hint" class="dim"></div>' +
+        '<label id="slot-add-ammo-row" class="slot-add-ammo-row" style="display:none">' +
+          '<input type="checkbox" id="slot-add-ammo">' +
+          '<span id="slot-add-ammo-label"></span>' +
+        '</label>';
+
+      var search = document.getElementById('slot-item-search');
+      search.value = slotPickedName || '';
+      search.addEventListener('input', function () { renderItemPicker(search.value); });
+      renderCategoryTabs();
+      renderItemPicker(search.value);
+      updateSlotMax();
+      updateAmmoCheckbox();
+      document.getElementById('modal-confirm-btn').onclick = confirmSlotChange;
+      showModal();
+      search.focus();
+    }
+
+    function renderCategoryTabs() {
+      var bar = document.getElementById('slot-category-tabs');
+      if (!bar) return;
+      bar.innerHTML = '';
+      var tabs = [{ key: 'ALL', label: SLOT_I18N.allCategories }];
+      pickerCategories.forEach(function (c) { tabs.push({ key: c, label: categoryLabel(c) }); });
+      tabs.push({ key: 'NONE', label: SLOT_I18N.noCategory });
+      tabs.forEach(function (tab) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'item-cat-tab' + (pickerCategory === tab.key ? ' active' : '');
+        btn.textContent = tab.label;
+        btn.addEventListener('click', function () {
+          pickerCategory = tab.key;
+          renderCategoryTabs();
+          renderItemPicker(document.getElementById('slot-item-search').value);
+        });
+        bar.appendChild(btn);
+      });
+    }
+
+    function itemMatchesCategory(name) {
+      if (pickerCategory === 'ALL') return true;
+      var cat = itemCategories[name];
+      if (pickerCategory === 'NONE') return !cat;
+      return cat === pickerCategory;
+    }
+
+    function renderItemPicker(query) {
+      var listEl = document.getElementById('slot-item-list');
+      if (!listEl) return;
+      hideItemTooltip();
+      applyItemDarkBg(listEl);
+      listEl.innerHTML = '';
+      var names = Object.keys(itemNameToId).sort();
+      var matches = names.filter(function (n) {
+        if (!itemMatchesCategory(n)) return false;
+        return itemMatchesSearch(itemDisplayNames, n, query, itemNameToId[n]);
+      });
+      if (matches.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'item-picker-empty';
+        empty.textContent = SLOT_I18N.noResults;
+        listEl.appendChild(empty);
+        return;
+      }
+      matches.forEach(function (n) {
+        var id = itemNameToId[n];
+        var row = document.createElement('div');
+        row.className = 'item-picker-row' + (id === slotPickedId ? ' selected' : '');
+        row.addEventListener('click', function () { pickItem(id, n); });
+        var img = document.createElement('img');
+        img.loading = 'lazy';
+        img.src = '/icon/' + encodeURIComponent(n);
+        img.alt = '';
+        img.onerror = function () { img.style.visibility = 'hidden'; };
+        var span = document.createElement('span');
+        span.innerHTML = itemDisplayHtml(itemDisplayNames, n);
+        row.appendChild(img);
+        row.appendChild(span);
+        attachItemTooltip(row, itemDescriptions, n);
+        listEl.appendChild(row);
+      });
+    }
+
+    function pickItem(id, name) {
+      slotPickedId = id;
+      slotPickedName = name;
+      var search = document.getElementById('slot-item-search');
+      if (search) search.value = name;
+      renderItemPicker(name);
+      updateSlotMax();
+      updateAmmoCheckbox();
+    }
+
+    function updateAmmoCheckbox() {
+      var row = document.getElementById('slot-add-ammo-row');
+      var checkbox = document.getElementById('slot-add-ammo');
+      var label = document.getElementById('slot-add-ammo-label');
+      if (!row || !checkbox || !label) return;
+      var ammoName = slotPickedName ? itemAmmoTypes[slotPickedName] : null;
+      if (!ammoName || !(ammoName in itemNameToId)) {
+        row.style.display = 'none';
+        checkbox.checked = false;
+        return;
+      }
+      label.textContent = SLOT_I18N.addAmmo.replace('{name}', ammoName);
+      row.style.display = '';
+    }
+
+    function updateSlotMax() {
+      var countEl = document.getElementById('slot-item-count');
+      var hintEl = document.getElementById('slot-item-hint');
+      if (!countEl || !hintEl) return;
+      if (slotPickedId === null) {
+        countEl.removeAttribute('max');
+        hintEl.textContent = '';
+        return;
+      }
+      var max = itemStackSizes[slotPickedName];
+      if (max) {
+        countEl.max = max;
+        if (parseInt(countEl.value, 10) > max) countEl.value = max;
+        hintEl.textContent = SLOT_I18N.count + ' ≤ ' + max;
+      } else {
+        countEl.removeAttribute('max');
+        hintEl.textContent = '';
+      }
+    }
+
+    function slotListSize(kind) { return kind === 'toolbelt' ? 9 : 40; }
+
+    function addAmmoIfChecked(list) {
+      var checkbox = document.getElementById('slot-add-ammo');
+      if (!checkbox || !checkbox.checked) return;
+      var ammoName = itemAmmoTypes[slotPickedName];
+      var ammoId = ammoName ? itemNameToId[ammoName] : null;
+      if (ammoId === undefined || ammoId === null) return;
+      var size = slotListSize(slotModalKind);
+      var used = {};
+      list.forEach(function (e) { used[e.slotIdx] = true; });
+      var freeIdx = -1;
+      for (var i = 0; i < size; i++) {
+        if (!used[i]) { freeIdx = i; break; }
+      }
+      if (freeIdx === -1) {
+        document.getElementById('toast').innerHTML = SLOT_I18N.addAmmoNoSlot;
+        scheduleToastHide();
+        return;
+      }
+      list.push({ id: ammoId, count: 1, slotIdx: freeIdx, ammo: 0, decay: 0 });
+    }
+
+    function confirmSlotChange() {
+      if (slotPickedId === null) { alert(SLOT_I18N.unknown); return; }
+      var countEl = document.getElementById('slot-item-count');
+      var count = parseInt(countEl.value, 10) || 1;
+      var max = itemStackSizes[slotPickedName];
+      if (max && count > max) count = max;
+      if (count < 1) count = 1;
+
+      var list = currentSlotList(slotModalKind);
+      var entry = null;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].slotIdx === slotModalIdx) { entry = list[i]; break; }
+      }
+      if (entry) {
+        entry.id = slotPickedId; entry.count = count;
+      } else {
+        list.push({ id: slotPickedId, count: count, slotIdx: slotModalIdx, ammo: 0, decay: 0 });
+      }
+      addAmmoIfChecked(list);
+      closeModal();
+      renderInventoryGrids();
+      invDirty = true;
+    }
+
+    function openDeleteSlotModal(kind, idx, itemName) {
+      slotModalKind = kind; slotModalIdx = idx;
+      document.getElementById('modal-title').textContent = SLOT_I18N.delConfirm + ' «' + itemName + '»?';
+      document.getElementById('modal-body').innerHTML = '';
+      document.getElementById('modal-confirm-btn').onclick = confirmDeleteSlot;
+      showModal();
+    }
+
+    function confirmDeleteSlot() {
+      var list = currentSlotList(slotModalKind);
+      var filtered = list.filter(function (e) { return e.slotIdx !== slotModalIdx; });
+      if (slotModalKind === 'toolbelt') invToolbelt = filtered; else invBag = filtered;
+      closeModal();
+      renderInventoryGrids();
+      invDirty = true;
+    }
+
+    function inventoryFetch() {
+      return fetch('/action/player/inventory', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: invEntityId, steamId: invSteamId, toolbelt: invToolbelt, bag: invBag,
+          baselineToolbelt: invBaselineToolbelt, baselineBag: invBaselineBag,
+        }),
+      });
+    }
+
+    function setInventoryLocked(locked) {
+      var fs = document.getElementById('inventory-group');
+      if (fs) fs.disabled = locked;
+    }
+
+    function sendConsoleCommand(evt, steamId) {
+      evt.preventDefault();
+      var input = document.getElementById('console-command');
+      var cmd = input.value.trim();
+      if (!cmd) return false;
+      fetch('/action/player/remoteex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'steamId=' + encodeURIComponent(steamId) + '&command=' + encodeURIComponent(cmd),
+      }).then(function () {
+        showToastHTML(I18N.consoleSent);
+        input.value = '';
+      });
+      return false;
+    }
+
+    var activateChapterSteamId = '';
+    var activateChapterAll = [];
+    function openActivateChapterModal(steamId) {
+      activateChapterSteamId = steamId;
+      activateChapterAll = [];
+      document.getElementById('modal-title').textContent = I18N.activateChapterTitle;
+      document.getElementById('modal-box').classList.add('wide');
+      document.getElementById('modal-body').innerHTML =
+        '<p class="dim">' + I18N.activateChapterWarning + '</p>' +
+        '<input type="text" id="activate-chapter-search" class="item-picker-search" placeholder="' + I18N.activateChapterSearchPlaceholder + '" autocomplete="off">' +
+        '<div class="item-picker-list" id="activate-chapter-list"></div>';
+      document.getElementById('activate-chapter-search').addEventListener('input', function () { renderActivateChapterList(this.value); });
+      document.getElementById('modal-confirm-btn').style.display = 'none';
+      document.getElementById('modal-overlay').style.display = 'flex';
+      fetch('/action/player/pda-chapters').then(function (r) { return r.json(); }).then(function (chapters) {
+        activateChapterAll = chapters || [];
+        renderActivateChapterList('');
+      });
+    }
+    function renderActivateChapterList(query) {
+      var listEl = document.getElementById('activate-chapter-list');
+      if (!listEl) return;
+      var q = (query || '').trim().toLowerCase();
+      var matches = activateChapterAll.filter(function (c) {
+        return !q || c.title.toLowerCase().indexOf(q) !== -1 || String(c.number).indexOf(q) !== -1;
+      });
+      listEl.innerHTML = '';
+      if (matches.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'item-picker-empty';
+        empty.textContent = I18N.activateChapterNoResults;
+        listEl.appendChild(empty);
+        return;
+      }
+      matches.slice(0, 200).forEach(function (c) {
+        var row = document.createElement('div');
+        row.className = 'item-picker-row';
+        row.textContent = c.number + '. ' + c.title;
+        row.addEventListener('click', function () { selectActivateChapter(c); });
+        listEl.appendChild(row);
+      });
+    }
+    function selectActivateChapter(c) {
+      var command = 'pda rwdchap ' + c.number;
+      var old = document.getElementById('activate-chapter-confirm');
+      if (old) old.remove();
+      document.getElementById('modal-body').insertAdjacentHTML('beforeend',
+        '<div class="warning-banner" id="activate-chapter-confirm">' +
+        I18N.activateChapterConfirm.replace('{title}', c.title) +
+        '</div>');
+      var confirmBtn = document.getElementById('modal-confirm-btn');
+      confirmBtn.style.display = '';
+      confirmBtn.onclick = function () {
+        fetch('/action/player/remoteex', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'steamId=' + encodeURIComponent(activateChapterSteamId) + '&command=' + encodeURIComponent(command),
+        }).then(function () {
+          closeModal();
+          showToastHTML(I18N.activateChapterSent.replace('{title}', c.title));
+        });
+      };
+    }
+    function toggleGmIv(btn) {
+      var steamId = btn.dataset.steamid;
+      var turningOn = btn.dataset.active !== '1';
+      var cmd = turningOn ? 'gm iv' : 'gm';
+      btn.disabled = true;
+      fetch('/action/player/remoteex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'steamId=' + encodeURIComponent(steamId) + '&command=' + encodeURIComponent(cmd),
+      }).then(function (r) { return r.text(); }).then(function (text) {
+        btn.disabled = false;
+        if (text.trim() === '') {
+          btn.dataset.active = turningOn ? '1' : '0';
+          btn.classList.toggle('btn-active', turningOn);
+          return;
+        }
+        document.getElementById('toast').textContent = text;
+        scheduleToastHide();
+      }).catch(function () { btn.disabled = false; });
+    }
+
+    function closeInventory() {
+      var column = document.getElementById('middle-column');
+      var panel = document.getElementById('middle-panel');
+      panel.classList.add('panel-leaving');
+      panel.addEventListener('transitionend', function onEnd() {
+        panel.removeEventListener('transitionend', onEnd);
+        column.style.display = 'none';
+        panel.classList.remove('panel-leaving');
+        document.getElementById('inventory-section').innerHTML = '';
+      });
+      currentPlayerURL = null;
+    }
+
+    function targetFaction(tag) {
+      document.getElementById('composer-type').value = 'chat';
+      document.getElementById('composer-channel').value = 'faction';
+      updateComposerVisibility();
+      var sel = document.getElementById('composer-faction');
+      if (sel) {
+        for (var i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].textContent === tag) { sel.value = sel.options[i].value; break; }
+        }
+      }
+      var input = document.querySelector('#composer-form input[name="text"]');
+      if (input) input.focus();
+    }
+
+    function applyChatFilters() {
+      var active = {};
+      document.querySelectorAll('.chat-filter').forEach(function (cb) {
+        if (cb.checked) active[cb.value] = true;
+      });
+      document.querySelectorAll('#chat-panel-inner tr.chat-row').forEach(function (row) {
+        var visible;
+        if (row.classList.contains('sender-server')) {
+          visible = !!active['server'];
+        } else {
+          visible = false;
+          for (var cls in active) {
+            if (row.classList.contains('channel-' + cls)) { visible = true; break; }
+          }
+        }
+        row.style.display = visible ? '' : 'none';
+      });
+    }
+    document.querySelectorAll('.chat-filter').forEach(function (cb) {
+      cb.addEventListener('change', applyChatFilters);
+    });
+    document.body.addEventListener('htmx:wsAfterMessage', applyChatFilters);
+
+    (function () {
+      var wrap = document.querySelector('.chat-table-wrap');
+      if (!wrap) return;
+      var AT_BOTTOM_PX = 40;
+      function isPinnedToBottom() {
+        return wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight <= AT_BOTTOM_PX;
+      }
+      wrap.scrollTop = wrap.scrollHeight;
+      var pinned = true;
+      wrap.addEventListener('scroll', function () { pinned = isPinnedToBottom(); });
+      document.body.addEventListener('htmx:wsAfterMessage', function () {
+        if (pinned) wrap.scrollTop = wrap.scrollHeight;
+      });
+    })();
+
+  </script>
+  <script src="/static/logs.js"></script>
+  <script src="/static/history.js"></script>
+  <script src="/static/structures.js"></script>
+  <script src="/static/chathistory.js"></script>
+  <script src="/static/itemlabels.js"></script>
+  <script>
+    initItemRenderConfig({{.ItemRenderConfigJSON}});
+  </script>
+</body>
+</html>

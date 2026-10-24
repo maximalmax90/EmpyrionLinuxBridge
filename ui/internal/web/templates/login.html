@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Empyrion Linux Bridge</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="center-screen">
+    <div class="auth-card">
+      <form method="post" action="/login">
+        <label for="username">{{t "login.username"}}</label>
+        <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+        <label for="password">{{t "login.password"}}</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+        <button type="submit">{{t "login.submit"}}</button>
+      </form>
+      {{if .Error}}<div class="auth-error">{{.Error}}</div>{{end}}
+    </div>
+  </div>
+</body>
+</html>

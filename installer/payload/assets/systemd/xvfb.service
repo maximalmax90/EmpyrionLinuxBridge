@@ -1,0 +1,12 @@
+[Unit]
+Description=X Virtual Frame Buffer Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/Xvfb :0 -screen 0 320x240x16
+User=empyrion
+Group=empyrion
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

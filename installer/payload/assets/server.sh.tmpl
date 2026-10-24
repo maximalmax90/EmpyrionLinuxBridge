@@ -1,0 +1,52 @@
+#!/bin/bash
+set -a
+. __MOUNTPOINT__/empyrion.env
+set +a
+
+DEDI_YAML=__EMP_DIR__/dedicated.yaml
+TEL_PORT=$(grep -oP 'Tel_Port:\s*\K\S+' "$DEDI_YAML")
+TEL_PWD=$(grep -oP 'Tel_Pwd:\s*\K\S+' "$DEDI_YAML")
+
+case "$1" in
+start)
+	/opt/wine-stable/bin/wineboot --init
+	sleep 10
+	cd __EMP_DIR__
+	/opt/wine-stable/bin/wine EmpyrionLauncher.exe -startDedi -dedicated dedicated.yaml
+	sleep 3
+	while pgrep -f "EmpyrionDedicated.exe" >/dev/null 2>&1; do
+		sleep 2
+	done
+	;;
+stop)
+	python3 - "$TEL_PORT" "$TEL_PWD" <<'PYEOF'
+import socket, sys, time
+
+port, pwd = int(sys.argv[1]), sys.argv[2]
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.settimeout(15)
+try:
+	s.connect(("127.0.0.1", port))
+	time.sleep(1)
+	s.recv(4096)
+	s.sendall((pwd + "\n").encode())
+	time.sleep(1)
+	s.recv(4096)
+	s.sendall(b"saveandexit 0\n")
+	time.sleep(2)
+except OSError:
+	pass
+finally:
+	s.close()
+PYEOF
+	for i in $(seq 1 45); do
+		pgrep -f "EmpyrionDedicated.exe" >/dev/null 2>&1 || break
+		sleep 1
+	done
+	/opt/wine-stable/bin/wineserver -k
+	;;
+*)
+	echo "Usage: $0 {start|stop}"
+	exit 1
+	;;
+esac

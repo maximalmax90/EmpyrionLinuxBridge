@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "accounts.heading"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "accounts" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content">
+        <section class="panel panel-full">
+          <h2>{{t "accounts.heading"}}</h2>
+          <p class="dim">{{t "accounts.hint"}}</p>
+
+          <fieldset class="player-group">
+            <legend>{{t "accounts.add"}}</legend>
+            <form hx-post="/action/accounts" hx-target="#accounts-list-inner" hx-swap="innerHTML" hx-on::after-request="this.reset()" class="task-form">
+              <label>{{t "accounts.username"}}<input type="text" name="username"></label>
+              <label>{{t "accounts.tempPassword"}}<input type="password" name="password" minlength="6"></label>
+              <label>{{t "accounts.role"}}
+                <select name="role">
+                  <option value="moderator">{{t "accounts.role.moderator"}}</option>
+                  <option value="admin">{{t "accounts.role.admin"}}</option>
+                </select>
+              </label>
+              <button type="submit" class="btn-small btn-primary">{{t "accounts.add"}}</button>
+            </form>
+          </fieldset>
+
+          <div id="accounts-list-inner">{{template "accounts_list_fragment" .}}</div>
+
+          <button type="button" class="btn-small btn-primary" onclick="saveAll()">{{t "common.save"}}</button>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script>
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+
+
+    async function saveAll() {
+      var messages = [];
+      var lastListHtml = null;
+      var savedAnything = false;
+
+      var permEl = document.getElementById('permChatbotBasic');
+      var permParams = permEl ? new URLSearchParams({
+        permChatbotBasic: permEl.checked ? 'on' : '',
+        permPanelBasic: document.getElementById('permPanelBasic').checked ? 'on' : '',
+        permStructures: document.getElementById('permStructures').checked ? 'on' : '',
+        permHistory: document.getElementById('permHistory').checked ? 'on' : '',
+        permChatHistory: document.getElementById('permChatHistory').checked ? 'on' : '',
+        permJournal: document.getElementById('permJournal').checked ? 'on' : '',
+      }) : null;
+
+      var selects = Array.prototype.slice.call(document.querySelectorAll('.role-select:not(:disabled)'));
+      var dirty = selects.filter(function (s) { return s.value !== s.dataset.original; });
+      for (var i = 0; i < dirty.length; i++) {
+        var s = dirty[i];
+        var body = new URLSearchParams({ role: s.value });
+        var r = await fetch('/action/accounts/' + encodeURIComponent(s.dataset.username) + '/role', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString(),
+        });
+        var html = await r.text();
+        if (html.trim().charAt(0) === '<') { lastListHtml = html; savedAnything = true; }
+        else messages.push(html);
+      }
+
+      if (permParams) {
+        var pr = await fetch('/action/accounts/moderator-permissions', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: permParams.toString(),
+        });
+        var permHtml = await pr.text();
+        if (permHtml.trim().charAt(0) === '<') { lastListHtml = permHtml; savedAnything = true; }
+        else messages.push(permHtml);
+      }
+
+      if (lastListHtml !== null) document.getElementById('accounts-list-inner').innerHTML = lastListHtml;
+      if (savedAnything) messages.push('Сохранено');
+      if (!messages.length) messages.push('Изменений нет');
+      showToastHTML(messages.join('<br>'));
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "nav.monitoring"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/vendor/uPlot.min.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+  <script src="/static/vendor/uPlot.iife.min.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "monitoring" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content">
+        <section class="panel panel-full">
+          <h2 class="logs-heading-row">
+            {{t "nav.monitoring"}}
+            <span class="monitoring-range">
+              <button type="button" class="btn-small range-btn" data-range="1h">{{t "monitoring.range1h"}}</button>
+              <button type="button" class="btn-small range-btn" data-range="6h">{{t "monitoring.range6h"}}</button>
+              <button type="button" class="btn-small range-btn btn-active" data-range="24h">{{t "monitoring.range24h"}}</button>
+              <button type="button" class="btn-small range-btn" data-range="7d">{{t "monitoring.range7d"}}</button>
+            </span>
+          </h2>
+          <div class="task-form monitoring-daterange">
+            <label>{{t "monitoring.dateFrom"}}<input type="date" id="monitoring-date-from"></label>
+            <label>{{t "monitoring.dateTo"}}<input type="date" id="monitoring-date-to"></label>
+            <button type="button" class="btn-small" id="monitoring-date-apply">{{t "monitoring.dateApply"}}</button>
+          </div>
+          <p id="monitoring-empty" class="dim" hidden></p>
+          <div class="monitoring-grid" id="monitoring-grid">
+            <div class="monitoring-card"><h3 id="chart-cpu-title">{{t "monitoring.cpu"}}</h3><div id="chart-cpu"></div></div>
+            <div class="monitoring-card"><h3>{{t "monitoring.ioWait"}}</h3><div id="chart-iowait"></div></div>
+            <div class="monitoring-card"><h3>{{t "monitoring.memory"}}</h3><div id="chart-mem"></div></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script>
+    var I18N = {
+      noData: {{t "monitoring.noData"}},
+      loadError: {{t "monitoring.loadError"}},
+      cpu: {{t "monitoring.cpu"}},
+      temperatures: {{t "monitoring.temperatures"}},
+      network: {{t "monitoring.network"}},
+      netIn: {{t "monitoring.netIn"}},
+      netOut: {{t "monitoring.netOut"}},
+      filesystems: {{t "monitoring.filesystems"}},
+      activity: {{t "monitoring.activity"}},
+      activityPlayfields: {{t "monitoring.activityPlayfields"}},
+      activityOnline: {{t "monitoring.activityOnline"}}
+    };
+  </script>
+  <script src="/static/monitoring.js"></script>
+  <script>
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+  </script>
+</body>
+</html>

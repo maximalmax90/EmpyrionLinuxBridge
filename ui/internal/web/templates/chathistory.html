@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "nav.chatHistory"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  {{template "chat_color_vars" .ChatColors}}
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "chatHistory" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content content-fill">
+        <section class="panel panel-full">
+          <h2>{{t "nav.chatHistory"}}</h2>
+          <div id="chat-history-root"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script src="/static/history.js"></script>
+  <script src="/static/chathistory.js"></script>
+  <script>
+    var I18N = {
+      historyFrom: {{t "history.modal.from"}},
+      historyTo: {{t "history.modal.to"}},
+      historyShow: {{t "history.modal.show"}},
+      historyLoading: {{t "history.modal.loading"}},
+      historyPageInfo: {{t "history.modal.pageInfo"}},
+      historyGroupRange: {{t "history.modal.groupRange"}},
+      historyGroupExtra: {{t "history.modal.groupExtra"}},
+      historyLimitLabel: {{t "history.modal.limitLabel"}},
+      modalCancel: {{t "modal.cancel"}},
+      requestError: {{t "common.requestError"}},
+
+      chatHistoryTitle: {{t "chatHistory.title"}},
+      chatHistoryGroupParticipants: {{t "chatHistory.groupParticipants"}},
+      chatHistoryPlayerLabel: {{t "chatHistory.playerLabel"}},
+      chatHistoryPlayerAll: {{t "chatHistory.playerAll"}},
+      chatHistoryChannelLabel: {{t "chatHistory.channelLabel"}},
+      chatHistoryChannelAll: {{t "chatHistory.channelAll"}},
+      chatHistoryTargetLabel: {{t "chatHistory.targetLabel"}},
+      chatHistoryTargetAll: {{t "chatHistory.targetAll"}},
+
+      chatChannelGlobal: {{t "channel.global"}},
+      chatChannelFaction: {{t "channel.faction"}},
+      chatChannelAlliance: {{t "channel.alliance"}},
+      chatChannelServer: {{t "channel.server"}},
+      chatChannelSingleplayer: {{t "channel.singleplayer"}},
+      chatChannelBanner: {{t "channel.banner"}},
+      bannerPriorityAlarm: {{t "composer.priority.alarm"}},
+      bannerPriorityMessage: {{t "composer.priority.message"}},
+      bannerPriorityInfo: {{t "composer.priority.info"}},
+
+      chatColTime: {{t "chat.col.time"}},
+      chatColChannel: {{t "chat.col.channel"}},
+      chatColPlayer: {{t "chat.col.player"}},
+      chatColMessage: {{t "chat.col.message"}},
+      chatEmpty: {{t "chat.empty"}}
+    };
+
+    initChatHistoryPage('chat-history-root');
+
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "nav.maintenance"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "maintenance" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content">
+        <section class="panel panel-full">
+          <h2>{{t "nav.maintenance"}}</h2>
+
+          <div id="banner-server-running" class="warning-banner"{{if not .Health.Active}} style="display:none"{{end}}>{{t "maintenance.bannerServerRunning"}}</div>
+          <div id="banner-not-logged-in" class="warning-banner"{{if .SteamUsername}} style="display:none"{{end}}>{{t "maintenance.bannerNotLoggedIn"}}</div>
+
+          <fieldset class="player-group">
+            <legend>{{t "maintenance.steamLegend"}}</legend>
+            <div id="steam-logged-out" class="task-form"{{if .SteamUsername}} style="display:none"{{end}}>
+              <input type="text" id="steam-username" placeholder="{{t "maintenance.steamUsername"}}" autocomplete="username">
+              <input type="password" id="steam-password" placeholder="{{t "maintenance.steamPassword"}}" autocomplete="current-password">
+              <button type="button" class="btn-small btn-primary" id="steam-login-btn" onclick="steamLogin()">{{t "maintenance.steamLoginBtn"}}</button>
+            </div>
+            <div id="steam-logged-in" class="task-form"{{if not .SteamUsername}} style="display:none"{{end}}>
+              <span id="steam-current-user">{{if .SteamUsername}}{{t "maintenance.steamLoggedInAs"}}: {{.SteamUsername}}{{end}}</span>
+              <button type="button" class="btn-small" onclick="steamLogout()">{{t "maintenance.steamLogoutBtn"}}</button>
+            </div>
+            <div id="steam-login-progress" style="display:none">
+              <pre class="steamjob-output" id="steam-login-output"></pre>
+              <span class="dim" id="steam-login-progress-text"></span>
+            </div>
+          </fieldset>
+
+          <fieldset class="player-group">
+            <legend>{{t "maintenance.serverLegend"}}</legend>
+            <p class="dim">{{t "maintenance.serverVersionLabel"}}: {{.Health.Version}}</p>
+            <div class="task-form">
+              <button type="button" class="btn-small btn-primary" id="update-btn" onclick="updateServer()"{{if .Health.Active}} disabled title="{{t "maintenance.serverUpdateNeedsStopped"}}"{{end}}>{{t "maintenance.update"}}</button>
+              <button type="button" class="btn-small" onclick="checkServerUpdate()">{{t "maintenance.checkServerUpdateBtn"}}</button>
+            </div>
+            <p class="dim" id="server-update-status" style="display:none"></p>
+            <div id="update-progress" style="display:none">
+              <span class="steamjob-bar"><span class="steamjob-bar-fill" id="update-progress-fill" style="width:0%"></span></span>
+              <span class="dim" id="update-progress-text"></span>
+              <pre class="steamjob-output" id="update-output"></pre>
+            </div>
+          </fieldset>
+
+          <fieldset class="player-group">
+            <legend>{{t "maintenance.duplicatesLegend"}}</legend>
+            <div class="task-form">
+              <button type="button" class="btn-small" onclick="checkDuplicatePlayers()">{{t "maintenance.duplicatesCheckBtn"}}</button>
+            </div>
+            <p class="dim" id="duplicates-status" style="display:none"></p>
+            <div class="table-scroll" id="duplicates-table-wrap" style="display:none">
+              <table class="data-table">
+                <thead><tr><th>{{t "maintenance.duplicates.col.name"}}</th><th>{{t "maintenance.duplicates.col.keep"}}</th><th>{{t "maintenance.duplicates.col.remove"}}</th></tr></thead>
+                <tbody id="duplicates-tbody"></tbody>
+              </table>
+            </div>
+            <div class="task-form" id="duplicates-cleanup-row" style="display:none">
+              <button type="button" class="btn-small btn-danger" id="duplicates-cleanup-btn" onclick="openDuplicatesCleanupConfirm()"{{if .Health.Active}} disabled title="{{t "maintenance.serverUpdateNeedsStopped"}}"{{end}}>{{t "maintenance.duplicatesCleanupBtn"}}</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="player-group" id="workshop-fieldset"{{if not .SteamUsername}} disabled{{end}}>
+            <legend>{{t "maintenance.workshopLegend"}}</legend>
+            <div class="task-form">
+              <input type="text" id="workshop-id-input" placeholder="{{t "maintenance.workshopIdPlaceholder"}}">
+              <button type="button" class="btn-small" onclick="workshopLookup()">{{t "maintenance.workshopLookupBtn"}}</button>
+              <button type="button" class="btn-small btn-primary" id="install_workshop-btn" onclick="workshopInstall()">{{t "maintenance.workshopInstallBtn"}}</button>
+            </div>
+            <p class="dim" id="workshop-preview" style="display:none"></p>
+            <div id="install_workshop-progress" style="display:none">
+              <pre class="steamjob-output" id="install_workshop-output"></pre>
+              <span class="dim" id="install_workshop-progress-text"></span>
+            </div>
+          </fieldset>
+
+          <fieldset class="player-group" id="workshop-installed-fieldset">
+            <legend>{{t "maintenance.workshopInstalledLegend"}}</legend>
+            <table class="data-table" id="workshop-table">
+              <thead>
+                <tr>
+                  <th>{{t "maintenance.workshopColName"}}</th>
+                  <th>{{t "maintenance.workshopColPath"}}</th>
+                  <th>{{t "maintenance.workshopColSize"}}</th>
+                  <th>{{t "maintenance.workshopColUpdate"}}</th>
+                  <th>{{t "maintenance.workshopColActions"}}</th>
+                </tr>
+              </thead>
+              <tbody id="workshop-table-body">
+                {{template "workshop_rows" (dict "Items" .InstalledScenarios "CurrentScenario" .CurrentScenario)}}
+              </tbody>
+            </table>
+          </fieldset>
+
+          <fieldset class="player-group">
+            <legend>{{t "maintenance.scenario"}}</legend>
+            <div class="task-form">
+              <select id="scenario-select">
+                {{range .Scenarios}}<option value="{{.}}" {{if eq . $.CurrentScenario}}selected{{end}}>{{.}}{{if eq . $.CurrentScenario}}{{t "maintenance.scenarioCurrent"}}{{end}}</option>{{end}}
+              </select>
+              <button type="button" class="btn-small" onclick="applyScenario()">{{t "maintenance.scenarioApply"}}</button>
+            </div>
+          </fieldset>
+
+          {{if .ScenarioCacheInfo.Active}}
+          <fieldset class="player-group">
+            <legend>{{t "maintenance.cacheLegend"}}</legend>
+            {{if .ScenarioCacheInfo.BuiltAt.IsZero}}
+            <p class="dim">{{t "maintenance.cacheNotBuiltYet"}}</p>
+            {{else}}
+            <p class="dim">{{t "maintenance.cacheBuiltAt"}}: {{.ScenarioCacheInfo.BuiltAt.Format "2006-01-02 15:04:05"}}</p>
+            <p class="dim">{{t "maintenance.cacheUrl"}}: <a href="{{.ScenarioCacheInfo.URL}}" target="_blank" rel="noopener noreferrer">{{.ScenarioCacheInfo.URL}}</a></p>
+            <p class="dim">{{t "maintenance.cacheSize"}}: {{humanSize .ScenarioCacheInfo.SizeBytes}}</p>
+            {{end}}
+          </fieldset>
+          {{end}}
+
+          <fieldset class="player-group">
+            <legend>{{t "maintenance.localizationLegend"}}</legend>
+            <table class="data-table loc-files-table" id="configfiles-table">
+              <thead>
+                <tr>
+                  <th>{{t "maintenance.configFileColPath"}}</th>
+                  <th>{{t "maintenance.configFileColSize"}}</th>
+                  <th>{{t "maintenance.configFileColModified"}}</th>
+                  <th>{{t "maintenance.configFileColActions"}}</th>
+                </tr>
+              </thead>
+              <tbody id="configfiles-table-body">
+                {{template "configfile_rows" .ConfigFiles}}
+              </tbody>
+            </table>
+            <input type="file" id="configfile-upload-input" style="display:none" onchange="configFileUploadInputChanged()">
+          </fieldset>
+
+
+          <fieldset class="player-group" id="server-console-group" {{if not (and .Health.Active .Health.TelnetOK)}}disabled{{end}}>
+            <legend>{{t "maintenance.consoleLegend"}}</legend>
+            <form id="server-console-form" onsubmit="return sendServerConsoleCommand(event)">
+              <input type="text" id="server-console-command" placeholder="{{t "player.console.placeholder"}}" class="console-input">
+              <button type="submit" class="btn-small">{{t "player.console.send"}}</button>
+            </form>
+            <pre id="server-console-output" class="console-output"></pre>
+          </fieldset>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <div id="modal-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box" id="modal-box">
+      <h3 id="modal-title"></h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-small" onclick="closeModal()">{{t "modal.cancel"}}</button>
+        <button type="button" class="btn-small btn-primary" id="modal-confirm-btn">{{t "modal.confirm"}}</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+
+
+    var steamJobPollTimer = null;
+    var steamCodeModalOpenedForJob = false;
+
+    var JOB_UI = {
+      update_server: { progress: 'update-progress', fill: 'update-progress-fill', text: 'update-progress-text', out: 'update-output', btn: 'update-btn' },
+      login: { progress: 'steam-login-progress', text: 'steam-login-progress-text', out: 'steam-login-output', btn: 'steam-login-btn', statusPrefix: 'SteamCMD: ' },
+      install_workshop: { progress: 'install_workshop-progress', text: 'install_workshop-progress-text', out: 'install_workshop-output', btn: 'install_workshop-btn', statusPrefix: 'SteamCMD: ' }
+    };
+    var JOB_MESSAGES = {
+      update_server: { done: {{t "maintenance.updateDone"}}, failed: {{t "maintenance.updateFailed"}} },
+      login: { done: {{t "maintenance.steamLoginDone"}}, failed: {{t "maintenance.steamLoginFailed"}} }
+    };
+    var steamLoginUsername = '';
+    var steamCodeAccountPromptTpl = {{t "maintenance.steamCodeAccountPrompt"}};
+
+    function updateServer() {
+      var btn = document.getElementById('update-btn');
+      btn.disabled = true;
+      fetch('/action/maintenance/update', { method: 'POST' })
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          document.getElementById('update-progress').style.display = '';
+          pollSteamJob();
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          showToastHTML(err.message);
+        });
+    }
+
+    function steamLogin() {
+      var username = document.getElementById('steam-username').value.trim();
+      var password = document.getElementById('steam-password').value;
+      if (!username || !password) { showToastHTML({{t "maintenance.steamCredsRequired"}}); return; }
+      steamLoginUsername = username;
+      var btn = document.getElementById('steam-login-btn');
+      btn.disabled = true;
+      fetch('/action/maintenance/steam-login', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password)
+      })
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          document.getElementById('steam-password').value = '';
+          document.getElementById('steam-login-progress').style.display = '';
+          pollSteamJob();
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          showToastHTML(err.message);
+        });
+    }
+
+    function steamLogout() {
+      fetch('/action/maintenance/steam-logout', { method: 'POST' })
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          document.getElementById('steam-logged-in').style.display = 'none';
+          document.getElementById('steam-logged-out').style.display = '';
+          document.getElementById('steam-username').value = '';
+          document.getElementById('workshop-fieldset').disabled = true;
+          document.getElementById('banner-not-logged-in').style.display = '';
+        })
+        .catch(function (err) { showToastHTML(err.message); });
+    }
+
+    function openSteamCodeModal() {
+      document.getElementById('modal-title').textContent = {{t "maintenance.steamCodeTitle"}};
+      document.getElementById('modal-body').innerHTML =
+        '<p class="dim" id="steam-code-prompt"></p>' +
+        '<div class="task-form"><input type="text" id="steam-code-input" placeholder="' + {{t "maintenance.steamCodePlaceholder"}} + '" autocomplete="one-time-code"></div>' +
+        '<p class="dim">' + {{t "maintenance.steamCodeAppHint"}} + '</p>';
+      document.getElementById('steam-code-prompt').textContent = steamCodeAccountPromptTpl.replace('{account}', steamLoginUsername);
+      document.getElementById('modal-confirm-btn').onclick = submitSteamCode;
+      document.getElementById('modal-overlay').style.display = 'flex';
+    }
+    function closeModal() {
+      document.getElementById('modal-overlay').style.display = 'none';
+    }
+    function submitSteamCode() {
+      var input = document.getElementById('steam-code-input');
+      var code = input ? input.value.trim() : '';
+      if (!code) { return; }
+      fetch('/action/maintenance/steam-code', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'code=' + encodeURIComponent(code)
+      })
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          closeModal();
+        })
+        .catch(function (err) { showToastHTML(err.message); });
+    }
+
+    function jobSeenKey(kind) { return 'elb_steamjob_seen_' + kind; }
+    function pollSteamJob() {
+      clearTimeout(steamJobPollTimer);
+      fetch('/action/maintenance/steamjob').then(function (r) { return r.json(); }).then(function (job) {
+        if (!job) { return; }
+        var isTerminal = job.state === 'success' || job.state === 'failed';
+        if (isTerminal && localStorage.getItem(jobSeenKey(job.kind)) === job.startedAt) {
+          return;
+        }
+        var ui = JOB_UI[job.kind];
+        if (ui) {
+          document.getElementById(ui.progress).style.display = '';
+          document.getElementById(ui.btn).disabled = (job.state === 'running' || job.state === 'awaiting_code');
+          var text = document.getElementById(ui.text);
+          var out = document.getElementById(ui.out);
+          if (ui.fill && job.progress >= 0) { document.getElementById(ui.fill).style.width = job.progress + '%'; }
+          text.textContent = (ui.statusPrefix || '') + job.state + (job.message ? ': ' + job.message : '');
+          out.textContent = (job.output || []).join('\n');
+          out.scrollTop = out.scrollHeight;
+        }
+        if (job.state === 'awaiting_code') {
+          if (!steamCodeModalOpenedForJob) {
+            steamCodeModalOpenedForJob = true;
+            openSteamCodeModal();
+          }
+        } else {
+          steamCodeModalOpenedForJob = false;
+        }
+        if (job.state === 'running' || job.state === 'awaiting_code') {
+          steamJobPollTimer = setTimeout(pollSteamJob, 1500);
+          return;
+        }
+        localStorage.setItem(jobSeenKey(job.kind), job.startedAt);
+        closeModal();
+        Object.keys(JOB_UI).forEach(function (k) { document.getElementById(JOB_UI[k].btn).disabled = false; });
+        if (job.kind === 'install_workshop') {
+          document.getElementById('install_workshop-progress').style.display = 'none';
+          document.getElementById('install_workshop-output').textContent = '';
+          document.getElementById('install_workshop-progress-text').textContent = '';
+          if (job.state === 'success') {
+            var parts = (job.message || '').split(':');
+            var placedName = parts.slice(1).join(':');
+            showToastHTML({{t "maintenance.workshopInstallDone"}} + (placedName ? ': ' + placedName : ''));
+            refreshScenarioSelect();
+            refreshWorkshopTable();
+            refreshConfigFilesTable();
+          } else {
+            showToastHTML({{t "maintenance.workshopInstallFailed"}} + (job.message ? ': ' + job.message : ''));
+          }
+          return;
+        }
+        var msgs = JOB_MESSAGES[job.kind];
+        if (msgs) {
+          showToastHTML((job.state === 'success' ? msgs.done : msgs.failed) + (job.message ? ': ' + job.message : ''));
+          if (job.kind === 'login' && job.state === 'success') {
+            document.getElementById('steam-current-user').textContent = {{t "maintenance.steamLoggedInAs"}} + ': ' + steamLoginUsername;
+            document.getElementById('steam-logged-out').style.display = 'none';
+            document.getElementById('steam-logged-in').style.display = '';
+            document.getElementById('steam-login-progress').style.display = 'none';
+            document.getElementById('steam-login-output').textContent = '';
+            document.getElementById('steam-login-progress-text').textContent = '';
+            document.getElementById('workshop-fieldset').disabled = false;
+            document.getElementById('banner-not-logged-in').style.display = 'none';
+          }
+        }
+      });
+    }
+
+    function refreshScenarioSelect() {
+      fetch('/action/maintenance/scenarios-refresh').then(function (r) { return r.json(); }).then(function (data) {
+        var select = document.getElementById('scenario-select');
+        var current = data.current;
+        select.innerHTML = '';
+        (data.scenarios || []).forEach(function (name) {
+          var opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name + (name === current ? {{t "maintenance.scenarioCurrent"}} : '');
+          if (name === current) { opt.selected = true; }
+          select.appendChild(opt);
+        });
+      });
+    }
+
+    function refreshWorkshopTable() {
+      fetch('/action/maintenance/steam-workshop-installed').then(function (r) { return r.text(); }).then(function (html) {
+        document.getElementById('workshop-table-body').innerHTML = html;
+      });
+    }
+
+    function refreshConfigFilesTable() {
+      fetch('/action/maintenance/config-files').then(function (r) { return r.text(); }).then(function (html) {
+        document.getElementById('configfiles-table-body').innerHTML = html;
+      });
+    }
+
+    function workshopCheckRow(btn) {
+      var tr = btn.closest('tr');
+      var id = tr.dataset.id;
+      var cell = tr.querySelector('.workshop-update-cell');
+      cell.textContent = '…';
+      fetch('/action/maintenance/steam-workshop-check', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'id=' + encodeURIComponent(id)
+      })
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          return r.json();
+        })
+        .then(function (status) {
+          cell.textContent = status.updateAvailable ? {{t "maintenance.workshopUpdateAvailable"}} : {{t "maintenance.workshopUpToDate"}};
+        })
+        .catch(function (err) {
+          cell.textContent = '—';
+          showToastHTML(err.message);
+        });
+    }
+
+    function workshopUpdateRow(btn) {
+      var tr = btn.closest('tr');
+      var id = tr.dataset.id;
+      document.getElementById('workshop-id-input').value = id;
+      workshopInstall();
+    }
+
+    function workshopRemoveRow(btn) {
+      var tr = btn.closest('tr');
+      var id = tr.dataset.id;
+      var title = tr.cells[0].textContent;
+      document.getElementById('modal-title').textContent = {{t "maintenance.workshopRemoveConfirmTitle"}};
+      document.getElementById('modal-body').innerHTML = '<p>' + {{t "maintenance.workshopRemoveConfirmBody"}}.replace('{title}', title) + '</p>';
+      document.getElementById('modal-confirm-btn').onclick = function () {
+        fetch('/action/maintenance/steam-workshop-remove', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'id=' + encodeURIComponent(id)
+        })
+          .then(function (r) {
+            if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+            closeModal();
+            refreshWorkshopTable();
+          })
+          .catch(function (err) { showToastHTML(err.message); });
+      };
+      document.getElementById('modal-overlay').style.display = 'flex';
+    }
+
+    function checkServerUpdate() {
+      var status = document.getElementById('server-update-status');
+      status.style.display = '';
+      status.textContent = '…';
+      fetch('/action/maintenance/server-update-check')
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          return r.json();
+        })
+        .then(function (data) {
+          var label = data.updateAvailable ? {{t "maintenance.workshopUpdateAvailable"}} : {{t "maintenance.workshopUpToDate"}};
+          status.textContent = label + ' (' + data.localBuildId + ' → ' + data.remoteBuildId + ')';
+        })
+        .catch(function (err) {
+          status.textContent = err.message;
+        });
+    }
+
+    function extractWorkshopId(raw) {
+      raw = (raw || '').trim();
+      var m = raw.match(/[?&]id=(\d+)/);
+      if (m) { return m[1]; }
+      m = raw.match(/^(\d+)$/);
+      if (m) { return m[1]; }
+      return '';
+    }
+
+    function workshopLookup() {
+      var id = extractWorkshopId(document.getElementById('workshop-id-input').value);
+      if (!id) { showToastHTML({{t "maintenance.workshopIdRequired"}}); return; }
+      fetch('/action/maintenance/steam-workshop-lookup?id=' + encodeURIComponent(id))
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          return r.json();
+        })
+        .then(function (info) {
+          var preview = document.getElementById('workshop-preview');
+          var sizeText = info.fileSize ? (info.fileSize / 1048576).toFixed(1) + ' MB' : '?';
+          var tagsText = (info.tags || []).join(', ');
+          preview.textContent = info.title + ' — ' + sizeText + (tagsText ? ' — ' + tagsText : '');
+          preview.style.display = '';
+        })
+        .catch(function (err) { showToastHTML(err.message); });
+    }
+
+    function workshopInstall() {
+      var id = extractWorkshopId(document.getElementById('workshop-id-input').value);
+      if (!id) { showToastHTML({{t "maintenance.workshopIdRequired"}}); return; }
+      var btn = document.getElementById('install_workshop-btn');
+      btn.disabled = true;
+      fetch('/action/maintenance/steam-workshop-install', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'id=' + encodeURIComponent(id)
+      })
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          document.getElementById('workshop-preview').style.display = 'none';
+          document.getElementById('workshop-preview').textContent = '';
+          document.getElementById('install_workshop-progress').style.display = '';
+          pollSteamJob();
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          showToastHTML(err.message);
+        });
+    }
+
+    function applyScenario() {
+      var name = document.getElementById('scenario-select').value;
+      fetch('/action/maintenance/scenario', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'name=' + encodeURIComponent(name) })
+        .then(function (r) { return r.text(); }).then(function (msg) {
+          showToastHTML(msg);
+          refreshScenarioSelect();
+          refreshWorkshopTable();
+          refreshConfigFilesTable();
+        });
+    }
+
+    function configFileDownloadRow(btn) {
+      var path = btn.closest('tr').dataset.path;
+      window.open('/action/maintenance/files/' + encodeURI(path), '_blank');
+    }
+
+    var configFileUploadTargetPath = '';
+    function configFileUploadRow(btn) {
+      configFileUploadTargetPath = btn.closest('tr').dataset.path;
+      document.getElementById('configfile-upload-input').click();
+    }
+    function configFileUploadInputChanged() {
+      var input = document.getElementById('configfile-upload-input');
+      if (!input.files.length) { return; }
+      var file = input.files[0];
+      var targetName = configFileUploadTargetPath.split('/').pop();
+      if (file.name !== targetName) {
+        showToastHTML({{t "maintenance.configFileNameMismatch"}} + ': ' + file.name + ' ≠ ' + targetName);
+        input.value = '';
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        fetch('/action/maintenance/files/' + encodeURI(configFileUploadTargetPath), { method: 'POST', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, body: reader.result })
+          .then(function (r) { return r.text(); }).then(function (msg) {
+            showToastHTML(msg);
+            input.value = '';
+            refreshConfigFilesTable();
+          });
+      };
+      reader.readAsText(file);
+    }
+
+    function syncServerConsoleGate() {
+      var group = document.getElementById('server-console-group');
+      if (!group) return;
+      group.disabled = !document.querySelector('.state-badge.state-online');
+    }
+    document.body.addEventListener('htmx:wsAfterMessage', syncServerConsoleGate);
+
+    var UPDATE_NEEDS_STOPPED_TITLE = {{t "maintenance.serverUpdateNeedsStopped"}};
+    function syncMaintenanceUpdateGate() {
+      var active = !!document.querySelector('.state-badge.state-online');
+      var btn = document.getElementById('update-btn');
+      if (btn) {
+        btn.disabled = active;
+        if (active) { btn.title = UPDATE_NEEDS_STOPPED_TITLE; } else { btn.removeAttribute('title'); }
+      }
+      var banner = document.getElementById('banner-server-running');
+      if (banner) banner.style.display = active ? '' : 'none';
+      var dupBtn = document.getElementById('duplicates-cleanup-btn');
+      if (dupBtn) {
+        dupBtn.disabled = active;
+        if (active) { dupBtn.title = UPDATE_NEEDS_STOPPED_TITLE; } else { dupBtn.removeAttribute('title'); }
+      }
+    }
+    document.body.addEventListener('htmx:wsAfterMessage', syncMaintenanceUpdateGate);
+
+    var duplicateGroups = [];
+    function checkDuplicatePlayers() {
+      var status = document.getElementById('duplicates-status');
+      status.style.display = '';
+      status.textContent = '…';
+      document.getElementById('duplicates-table-wrap').style.display = 'none';
+      document.getElementById('duplicates-cleanup-row').style.display = 'none';
+      fetch('/action/maintenance/duplicate-players')
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          return r.json();
+        })
+        .then(function (groups) {
+          duplicateGroups = groups || [];
+          renderDuplicateGroups();
+        })
+        .catch(function (err) { status.textContent = err.message; });
+    }
+    function renderDuplicateGroups() {
+      var status = document.getElementById('duplicates-status');
+      var wrap = document.getElementById('duplicates-table-wrap');
+      var tbody = document.getElementById('duplicates-tbody');
+      var cleanupRow = document.getElementById('duplicates-cleanup-row');
+      if (!duplicateGroups.length) {
+        status.style.display = '';
+        status.textContent = {{t "maintenance.duplicatesNone"}};
+        wrap.style.display = 'none';
+        cleanupRow.style.display = 'none';
+        return;
+      }
+      status.style.display = 'none';
+      tbody.innerHTML = '';
+      duplicateGroups.forEach(function (g) {
+        var tr = document.createElement('tr');
+        var tdName = document.createElement('td');
+        tdName.textContent = g.name;
+        var tdKeep = document.createElement('td');
+        tdKeep.textContent = g.keep;
+        var tdRemove = document.createElement('td');
+        tdRemove.textContent = g.remove.join(', ');
+        tr.appendChild(tdName); tr.appendChild(tdKeep); tr.appendChild(tdRemove);
+        tbody.appendChild(tr);
+      });
+      wrap.style.display = '';
+      cleanupRow.style.display = '';
+    }
+    function openDuplicatesCleanupConfirm() {
+      if (!duplicateGroups.length) return;
+      var count = duplicateGroups.reduce(function (n, g) { return n + g.remove.length; }, 0);
+      document.getElementById('modal-title').textContent = {{t "maintenance.duplicatesCleanupConfirmTitle"}};
+      document.getElementById('modal-body').innerHTML = '<p>' + {{t "maintenance.duplicatesCleanupConfirmBody"}}.replace('{count}', count) + '</p>';
+      document.getElementById('modal-confirm-btn').onclick = function () {
+        fetch('/action/maintenance/duplicate-players/cleanup', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(duplicateGroups)
+        })
+          .then(function (r) {
+            if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+            return r.json();
+          })
+          .then(function (data) {
+            closeModal();
+            showToastHTML({{t "maintenance.duplicatesCleanupDone"}}.replace('{n}', data.removed));
+            checkDuplicatePlayers();
+          })
+          .catch(function (err) { showToastHTML(err.message); });
+      };
+      document.getElementById('modal-overlay').style.display = 'flex';
+    }
+
+    function sendServerConsoleCommand(evt) {
+      evt.preventDefault();
+      var input = document.getElementById('server-console-command');
+      var cmd = input.value.trim();
+      if (!cmd) return false;
+      fetch('/action/console', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'command=' + encodeURIComponent(cmd),
+      }).then(function (r) { return r.text(); }).then(function (text) {
+        document.getElementById('server-console-output').textContent = text;
+      });
+      return false;
+    }
+
+    pollSteamJob();
+  </script>
+</body>
+</html>
