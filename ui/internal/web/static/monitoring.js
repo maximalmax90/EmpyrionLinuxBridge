@@ -171,9 +171,25 @@
 		return chartEl;
 	}
 
+	var chartLabels = {};
+	function sameLabels(a, b) {
+		if (a.length !== b.length) return false;
+		for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+		return true;
+	}
+	function discardChartIfLabelsChanged(key, labels) {
+		if (!charts[key] || sameLabels(chartLabels[key] || [], labels)) return;
+		var card = charts[key].root && charts[key].root.closest('.monitoring-card');
+		charts[key].destroy();
+		if (card && card.parentNode) card.parentNode.removeChild(card);
+		delete charts[key];
+	}
+
 	function ensureDisksChart(labels) {
+		discardChartIfLabelsChanged('disks', labels);
 		if (charts.disks) return charts.disks;
 		charts.disks = makeChart(addCard(I18N.filesystems), labels, fmtPercentAxis, [0, 100], seriesValueFmt('%'));
+		chartLabels.disks = labels.slice();
 		return charts.disks;
 	}
 
@@ -225,14 +241,18 @@
 	}
 
 	function ensureTempChart(labels) {
+		discardChartIfLabelsChanged('temp', labels);
 		if (charts.temp) return charts.temp;
 		charts.temp = makeChart(addCard(I18N.temperatures), labels, fmtTempAxis, undefined, seriesValueFmt('°C'));
+		chartLabels.temp = labels.slice();
 		return charts.temp;
 	}
 
 	function ensureNetChart(labels) {
+		discardChartIfLabelsChanged('net', labels);
 		if (charts.net) return charts.net;
 		charts.net = makeChart(addCard(I18N.network), labels, fmtBpsAxis, undefined, netSeriesValueFmt());
+		chartLabels.net = labels.slice();
 		return charts.net;
 	}
 

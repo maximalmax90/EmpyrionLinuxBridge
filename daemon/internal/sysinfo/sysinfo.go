@@ -263,6 +263,10 @@ func ReadNetIfacesFrom(netRoot string) ([]NetIface, error) {
 		if name == "lo" {
 			continue
 		}
+		target, errLink := filepath.EvalSymlinks(filepath.Join(netRoot, name))
+		if errLink == nil && strings.Contains(filepath.ToSlash(target), "/devices/virtual/net/") {
+			continue
+		}
 		rx, errRx := readUintFile(filepath.Join(netRoot, name, "statistics", "rx_bytes"))
 		tx, errTx := readUintFile(filepath.Join(netRoot, name, "statistics", "tx_bytes"))
 		if errRx != nil || errTx != nil {

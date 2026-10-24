@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"elb/daemon/internal/config"
@@ -14,6 +15,40 @@ import (
 	"elb/daemon/internal/remotestore"
 	"elb/daemon/internal/settings"
 )
+
+func isTransientNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, s := range []string{
+		"network is unreachable",
+		"no route to host",
+		"no such host",
+		"temporary failure in name resolution",
+		"connection timed out",
+		"i/o timeout",
+	} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
+}
+
+func withNetworkRetry(attempts int, delay time.Duration, fn func() error) error {
+	var err error
+	for i := 0; i < attempts; i++ {
+		err = fn()
+		if err == nil || !isTransientNetworkError(err) {
+			return err
+		}
+		if i < attempts-1 {
+			time.Sleep(delay)
+		}
+	}
+	return err
+}
 
 const ZipName = "sharedData.zip"
 
@@ -150,7 +185,9 @@ func Prepare(cfg config.Config, set settings.ScenarioCache) {
 			fallback(cfg, serr)
 			return
 		}
-		if perr := store.Put(destZip, ZipName, 0); perr != nil {
+		if perr := withNetworkRetry(6, 2*time.Second, func() error {
+			return store.Put(destZip, ZipName, 0)
+		}); perr != nil {
 			fallback(cfg, perr)
 			return
 		}
@@ -158,7 +195,9 @@ func Prepare(cfg config.Config, set settings.ScenarioCache) {
 
 	writeStatus(cfg, PhaseVerifying, "")
 	url := ComputeURL(set.PublicURLBase, fp)
-	if verr := verifyDownloadable(url, info.Size()); verr != nil {
+	if verr := withNetworkRetry(6, 2*time.Second, func() error {
+		return verifyDownloadable(url, info.Size())
+	}); verr != nil {
 		fallback(cfg, verr)
 		return
 	}

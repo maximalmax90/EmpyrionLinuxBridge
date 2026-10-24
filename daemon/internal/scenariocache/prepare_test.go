@@ -1,16 +1,86 @@
 package scenariocache
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"elb/daemon/internal/config"
 	"elb/daemon/internal/settings"
 )
+
+func TestIsTransientNetworkError(t *testing.T) {
+	cases := []struct {
+		err  error
+		want bool
+	}{
+		{nil, false},
+		{errors.New("dial tcp 10.10.1.10:21: connect: network is unreachable"), true},
+		{errors.New("dial tcp 10.10.1.10:21: connect: no route to host"), true},
+		{errors.New("lookup files.example.com: no such host"), true},
+		{errors.New("lookup files.example.com: server misbehaving: temporary failure in name resolution"), true},
+		{errors.New("dial tcp 10.10.1.10:21: connect: connection refused"), false},
+		{errors.New("login admin: 530 Login incorrect"), false},
+		{errors.New("verify http://x: unexpected status 404 Not Found"), false},
+	}
+	for _, c := range cases {
+		if got := isTransientNetworkError(c.err); got != c.want {
+			t.Errorf("isTransientNetworkError(%v) = %v, want %v", c.err, got, c.want)
+		}
+	}
+}
+
+func TestWithNetworkRetry_RetriesOnlyTransientErrors(t *testing.T) {
+	t.Run("транзиентная ошибка — ретраит и в итоге успех", func(t *testing.T) {
+		calls := 0
+		err := withNetworkRetry(5, time.Millisecond, func() error {
+			calls++
+			if calls < 3 {
+				return errors.New("connect: network is unreachable")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("got err %v, want nil after retries", err)
+		}
+		if calls != 3 {
+			t.Fatalf("got %d calls, want 3", calls)
+		}
+	})
+
+	t.Run("нетранзиентная ошибка — ни одного повтора", func(t *testing.T) {
+		calls := 0
+		err := withNetworkRetry(5, time.Millisecond, func() error {
+			calls++
+			return errors.New("connect: connection refused")
+		})
+		if err == nil {
+			t.Fatal("expected error to propagate")
+		}
+		if calls != 1 {
+			t.Fatalf("got %d calls, want 1 (no retry on non-transient error)", calls)
+		}
+	})
+
+	t.Run("транзиентная ошибка не проходит — возвращает её после всех попыток", func(t *testing.T) {
+		calls := 0
+		err := withNetworkRetry(3, time.Millisecond, func() error {
+			calls++
+			return errors.New("connect: network is unreachable")
+		})
+		if err == nil {
+			t.Fatal("expected error after exhausting retries")
+		}
+		if calls != 3 {
+			t.Fatalf("got %d calls, want 3 (attempts exhausted)", calls)
+		}
+	})
+}
 
 const testDedicatedYAML = "ServerConfig:\r\n" +
 	"    Srv_Port: 30000\r\n" +
