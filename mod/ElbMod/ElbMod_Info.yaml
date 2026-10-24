@@ -1,0 +1,5 @@
+Name: ELB Mod
+Description: "Empyrion Linux Bridge - localhost API for the ELB daemon (MVP: chat)"
+Author: ELB project
+Version: 0.1
+ModTargets: PfServer,Dedi

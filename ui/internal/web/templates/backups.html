@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "backups.heading"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "backups" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content">
+        <section class="panel panel-full">
+          <h2>{{t "backups.heading"}}</h2>
+
+          <p>
+            <button type="button" class="btn-icon btn-primary nfi nfi-play" id="run-backup-btn" onclick="runBackupNow()"
+              title="{{if .Health.Active}}{{t "backups.runBlockedHint"}}{{else if .HasSecondaryDestination}}{{t "backups.run"}}{{else}}{{t "backups.runSnapshotOnly"}}{{end}}"
+              {{if .Health.Active}}disabled{{end}}></button>
+          </p>
+
+          {{template "backups_tables" .}}
+        </section>
+      </div>
+    </div>
+  </div>
+
+
+  {{define "backups_tables"}}
+  <div id="backups-tables" data-any-archiving="{{if .AnyArchiving}}1{{end}}">
+    {{$d0 := index .Destinations 0}}
+    {{$d1 := index .Destinations 1}}
+
+
+    <fieldset class="player-group">
+      <legend>{{t "backups.primaryTitle"}}</legend>
+      <table class="data-table backups-table">
+        <thead><tr>
+          <th>{{t "backups.col.num"}}</th>
+          <th>{{t "backups.col.name"}}</th>
+          <th>{{t "backups.col.subvolumes"}}</th>
+          <th>{{t "backups.col.delta"}}</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+        {{range $i, $snap := .Snapshots}}
+          <tr>
+            <td class="dim">{{inc $i}}</td>
+            <td>{{$snap.Name}}</td>
+            <td class="dim">{{range $j, $s := $snap.Subvolumes}}{{if $j}}, {{end}}{{$s}}{{end}}</td>
+            <td>{{humanSize $snap.SizeBytes}}</td>
+            <td>
+              <div class="backups-actions">
+              {{if $snap.Archiving}}<span class="dim backups-archiving"><span class="nfi nfi-refresh"></span> {{t "backups.archiving"}}</span>
+              {{else}}
+              <a class="btn-icon nfi nfi-download" title="{{t "backups.action.download"}}" href="/action/backups/download?dest=0&amp;name={{$snap.Name}}"></a>
+              {{end}}
+              <button type="button" class="btn-icon nfi nfi-folder-open" title="{{if $.Health.Active}}{{t "backups.restoreBlockedHint"}}{{else}}{{t "backups.action.restoreFiles"}}{{end}}" {{if $.Health.Active}}disabled{{end}} onclick="openBrowseModal(0, '{{$snap.Name}}')"></button>
+              <button type="button" class="btn-icon nfi nfi-restore" title="{{if $.Health.Active}}{{t "backups.restoreBlockedHint"}}{{else}}{{t "backups.action.restore"}}{{end}}" {{if $.Health.Active}}disabled{{end}} onclick="restoreWhole(0, '{{$snap.Name}}')"></button>
+              <button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "backups.action.delete"}}" onclick="deleteBackup(0, '{{$snap.Name}}')"></button>
+              </div>
+            </td>
+          </tr>
+        {{else}}
+          <tr><td colspan="5" class="empty">{{t "backups.empty"}}</td></tr>
+        {{end}}
+        </tbody>
+        {{if .Snapshots}}
+        <tfoot><tr>
+          <td colspan="5" class="dim">{{t "backups.total"}}: {{$d0.Stats.BackupsCount}}{{if $d0.Stats.BackupsBytes}} (&asymp;{{humanSize $d0.Stats.BackupsBytes}}){{end}}</td>
+        </tr></tfoot>
+        {{end}}
+      </table>
+    </fieldset>
+
+    {{if $d1.Type}}
+    <fieldset class="player-group">
+      <legend>{{t "backups.secondaryTitle"}} ({{if eq $d1.Type "disk"}}{{t "backups.type.disk"}}: {{$d1.DiskPath}}{{else if eq $d1.Type "ftp"}}{{if eq $d1.FTPProtocol "sftp"}}{{t "backups.type.sftp"}}{{else}}{{t "backups.type.ftp"}}{{end}}: {{$d1.FTPHost}}{{if $d1.FTPPath}} {{$d1.FTPPath}}{{end}}{{else if eq $d1.Type "s3"}}{{t "backups.type.s3"}}: {{$d1.S3Bucket}}@{{$d1.S3Endpoint}}{{end}})</legend>
+      {{if $d1.Stats.Unsupported}}
+      <p class="dim">{{t "backups.secondaryUnavailable"}}</p>
+      {{else}}
+      <table class="data-table backups-table">
+        <thead><tr>
+          <th>{{t "backups.col.num"}}</th>
+          <th>{{t "backups.col.name"}}</th>
+          <th></th>
+          <th>{{t "backups.col.size"}}</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+        {{range $i, $entry := $d1.Stats.Entries}}
+          <tr>
+            <td class="dim">{{inc $i}}</td>
+            <td>{{$entry.Name}}</td>
+            <td></td>
+            <td>{{humanSize $entry.SizeBytes}}</td>
+            <td>
+              <div class="backups-actions">
+              <a class="btn-icon nfi nfi-download" title="{{t "backups.action.download"}}" href="/action/backups/download?dest=1&amp;name={{$entry.Name}}"></a>
+              <button type="button" class="btn-icon nfi nfi-folder-open" title="{{if $.Health.Active}}{{t "backups.restoreBlockedHint"}}{{else}}{{t "backups.action.restoreFiles"}}{{end}}" {{if $.Health.Active}}disabled{{end}} onclick="openBrowseModal(1, '{{$entry.Name}}')"></button>
+              <button type="button" class="btn-icon nfi nfi-restore" title="{{if $.Health.Active}}{{t "backups.restoreBlockedHint"}}{{else}}{{t "backups.action.restore"}}{{end}}" {{if $.Health.Active}}disabled{{end}} onclick="restoreWhole(1, '{{$entry.Name}}')"></button>
+              <button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "backups.action.delete"}}" onclick="deleteBackup(1, '{{$entry.Name}}')"></button>
+              </div>
+            </td>
+          </tr>
+        {{else}}
+          <tr><td colspan="5" class="empty">{{t "backups.diskEmpty"}}</td></tr>
+        {{end}}
+        </tbody>
+        {{if $d1.Stats.Entries}}
+        <tfoot><tr>
+          <td colspan="5" class="dim">{{t "backups.total"}}: {{$d1.Stats.BackupsCount}}{{if $d1.Stats.BackupsBytes}} ({{humanSize $d1.Stats.BackupsBytes}}){{end}}</td>
+        </tr></tfoot>
+        {{end}}
+      </table>
+      {{end}}
+    </fieldset>
+    {{end}}
+  </div>
+  {{end}}
+
+  <div id="modal-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box wide">
+      <div id="browse-panel">
+        <h3 id="browse-title"></h3>
+        <div id="browse-breadcrumb" class="dim" style="margin-bottom:6px"></div>
+        <div style="max-height:320px;overflow-y:auto">
+          <table class="data-table">
+            <tbody id="browse-list"></tbody>
+          </table>
+        </div>
+        <div class="chip-list" id="browse-selected-chips"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-icon nfi nfi-close" title="{{t "modal.cancel"}}" onclick="closeModal()"></button>
+          <button type="button" class="btn-small" onclick="confirmBrowseRestore(true)">{{t "backups.browse.restoreAll"}}</button>
+          <button type="button" class="btn-small btn-primary" id="browse-restore-btn" onclick="confirmBrowseRestore(false)" disabled>{{t "backups.browse.restoreSelected"}}</button>
+        </div>
+      </div>
+      <div id="confirm-panel" style="display:none">
+        <h3 id="confirm-title"></h3>
+        <p id="confirm-question"></p>
+        <label id="confirm-input-row"><span>{{t "backups.confirmNameLabel"}}</span>
+          <input type="text" id="confirm-input" oninput="updateConfirmButton()">
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-icon nfi nfi-close" title="{{t "modal.cancel"}}" onclick="closeModal()"></button>
+          <button type="button" class="btn-icon btn-primary nfi nfi-check" title="{{t "modal.confirm"}}" id="confirm-btn" onclick="runConfirmedAction()" disabled></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script>
+    var I18N = {
+      requestError: {{t "common.requestError"}},
+      confirmTitle: {{t "backups.confirmTitle"}},
+      confirmRestore: {{t "backups.confirmRestore"}},
+      confirmDelete: {{t "backups.confirmDelete"}},
+      browseTitle: {{t "backups.browse.title"}},
+      browseRoot: {{t "backups.browse.root"}},
+      browseEmpty: {{t "backups.browse.empty"}},
+    };
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+
+    var backupsTablesLastHTML = null;
+    function pollBackupsTables() {
+      fetch('/action/backups/tables').then(function (r) { return r.text(); }).then(function (html) {
+        if (html !== backupsTablesLastHTML) {
+          backupsTablesLastHTML = html;
+          document.getElementById('backups-tables').outerHTML = html;
+        }
+        if (/data-any-archiving="1"/.test(html)) {
+          setTimeout(pollBackupsTables, 4000);
+        }
+      });
+    }
+    (function () {
+      var el = document.getElementById('backups-tables');
+      if (el && el.dataset.anyArchiving === '1') {
+        setTimeout(pollBackupsTables, 4000);
+      }
+    })();
+
+    function afterAction(promise) {
+      promise
+        .then(function (r) { return r.text(); })
+        .then(function (html) { showToastHTML(html); setTimeout(function () { location.reload(); }, 600); })
+        .catch(function () { showToastHTML(I18N.requestError); });
+    }
+
+    function runBackupNow() {
+      var btn = document.getElementById('run-backup-btn');
+      btn.disabled = true;
+      afterAction(fetch('/action/backups/run', { method: 'POST' }).catch(function (err) {
+        btn.disabled = false;
+        throw err;
+      }));
+    }
+    var confirmCallback = null;
+    function openConfirmModal(question, expectedName, onConfirm, requireTyped) {
+      document.getElementById('browse-panel').style.display = 'none';
+      document.getElementById('confirm-panel').style.display = '';
+      document.getElementById('confirm-title').textContent = I18N.confirmTitle;
+      document.getElementById('confirm-question').textContent = question;
+      var input = document.getElementById('confirm-input');
+      var row = document.getElementById('confirm-input-row');
+      var btn = document.getElementById('confirm-btn');
+      input.value = '';
+      input.placeholder = expectedName;
+      input.dataset.expected = expectedName;
+      confirmCallback = onConfirm;
+      if (requireTyped) {
+        row.style.display = '';
+        btn.disabled = true;
+      } else {
+        row.style.display = 'none';
+        btn.disabled = false;
+      }
+      document.getElementById('modal-overlay').style.display = 'flex';
+      if (requireTyped) input.focus();
+    }
+    function updateConfirmButton() {
+      var input = document.getElementById('confirm-input');
+      document.getElementById('confirm-btn').disabled = input.value !== input.dataset.expected;
+    }
+    function runConfirmedAction() {
+      var cb = confirmCallback;
+      closeModal();
+      if (cb) cb();
+    }
+    function closeModal() {
+      document.getElementById('modal-overlay').style.display = 'none';
+      confirmCallback = null;
+    }
+
+    function restoreWhole(dest, name) {
+      openConfirmModal(I18N.confirmRestore, name, function () {
+        if (dest === 0) {
+          afterAction(fetch('/action/backups/' + encodeURIComponent(name) + '/restore', { method: 'POST' }));
+        } else {
+          afterAction(fetch('/action/backups/restore-files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dest: dest, name: name, paths: [] }),
+          }));
+        }
+      }, false);
+    }
+    function deleteBackup(dest, name) {
+      openConfirmModal(I18N.confirmDelete, name, function () {
+        afterAction(fetch('/action/backups?dest=' + dest + '&name=' + encodeURIComponent(name), { method: 'DELETE' }));
+      }, true);
+    }
+
+    var browseDest = 0;
+    var browseName = '';
+    var browsePath = '';
+    var browseSelected = [];   
+
+    function openBrowseModal(dest, name) {
+      browseDest = dest;
+      browseName = name;
+      browsePath = '';
+      browseSelected = [];
+      document.getElementById('confirm-panel').style.display = 'none';
+      document.getElementById('browse-panel').style.display = '';
+      document.getElementById('browse-title').textContent = I18N.browseTitle + ': ' + name;
+      document.getElementById('modal-overlay').style.display = 'flex';
+      loadBrowseListing();
+    }
+
+    function joinPath(base, name) { return base ? base + '/' + name : name; }
+    function parentPath(path) {
+      var idx = path.lastIndexOf('/');
+      return idx === -1 ? '' : path.slice(0, idx);
+    }
+
+    function loadBrowseListing() {
+      var q = new URLSearchParams({ dest: browseDest, name: browseName, path: browsePath });
+      fetch('/action/backups/browse?' + q.toString())
+        .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+        .then(renderBrowseListing)
+        .catch(function () { showToastHTML(I18N.requestError); });
+    }
+
+    function renderBreadcrumb() {
+      var el = document.getElementById('browse-breadcrumb');
+      el.innerHTML = '';
+      var rootLink = document.createElement('a');
+      rootLink.href = '#';
+      rootLink.textContent = I18N.browseRoot;
+      rootLink.onclick = function () { browsePath = ''; loadBrowseListing(); return false; };
+      el.appendChild(rootLink);
+      if (!browsePath) return;
+      var acc = '';
+      browsePath.split('/').forEach(function (seg) {
+        acc = joinPath(acc, seg);
+        el.appendChild(document.createTextNode(' / '));
+        var target = acc;
+        var link = document.createElement('a');
+        link.href = '#';
+        link.textContent = seg;
+        link.onclick = function () { browsePath = target; loadBrowseListing(); return false; };
+        el.appendChild(link);
+      });
+    }
+
+    function formatSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' K';
+      return (bytes / 1024 / 1024).toFixed(1) + ' M';
+    }
+
+    function renderBrowseListing(entries) {
+      renderBreadcrumb();
+      var tbody = document.getElementById('browse-list');
+      tbody.innerHTML = '';
+      if (browsePath) {
+        var up = document.createElement('tr');
+        var td = document.createElement('td');
+        td.colSpan = 3;
+        var a = document.createElement('a');
+        a.href = '#';
+        a.textContent = '..';
+        a.onclick = function () { browsePath = parentPath(browsePath); loadBrowseListing(); return false; };
+        td.appendChild(a);
+        up.appendChild(td);
+        tbody.appendChild(up);
+      }
+      if (!entries || !entries.length) {
+        var emptyRow = document.createElement('tr');
+        var emptyTd = document.createElement('td');
+        emptyTd.colSpan = 3;
+        emptyTd.className = 'empty';
+        emptyTd.textContent = I18N.browseEmpty;
+        emptyRow.appendChild(emptyTd);
+        tbody.appendChild(emptyRow);
+      }
+      (entries || []).forEach(function (e) {
+        var full = joinPath(browsePath, e.name);
+        var tr = document.createElement('tr');
+
+        var cbTd = document.createElement('td');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = browseSelected.indexOf(full) !== -1;
+        cb.onchange = function () { toggleSelect(full, cb.checked); };
+        cbTd.appendChild(cb);
+        tr.appendChild(cbTd);
+
+        var nameTd = document.createElement('td');
+        if (e.isDir) {
+          var link = document.createElement('a');
+          link.href = '#';
+          link.textContent = e.name + '/';
+          link.onclick = function () { browsePath = full; loadBrowseListing(); return false; };
+          nameTd.appendChild(link);
+        } else {
+          nameTd.textContent = e.name;
+        }
+        tr.appendChild(nameTd);
+
+        var sizeTd = document.createElement('td');
+        sizeTd.className = 'dim';
+        sizeTd.textContent = e.isDir ? '' : formatSize(e.size);
+        tr.appendChild(sizeTd);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function toggleSelect(path, checked) {
+      var idx = browseSelected.indexOf(path);
+      if (checked && idx === -1) browseSelected.push(path);
+      else if (!checked && idx !== -1) browseSelected.splice(idx, 1);
+      renderSelectedChips();
+    }
+
+    function renderSelectedChips() {
+      var wrap = document.getElementById('browse-selected-chips');
+      wrap.innerHTML = '';
+      browseSelected.forEach(function (p, i) {
+        var chip = document.createElement('span');
+        chip.className = 'chip';
+        var text = document.createElement('span');
+        text.textContent = p;
+        chip.appendChild(text);
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'chip-remove nfi nfi-close';
+        remove.onclick = function () {
+          browseSelected.splice(i, 1);
+          renderSelectedChips();
+          loadBrowseListing();
+        };
+        chip.appendChild(remove);
+        wrap.appendChild(chip);
+      });
+      document.getElementById('browse-restore-btn').disabled = browseSelected.length === 0;
+    }
+
+    function confirmBrowseRestore(all) {
+      var paths = all ? [] : browseSelected.slice();
+      if (!all && paths.length === 0) return;
+      var dest = browseDest, name = browseName;
+      openConfirmModal(I18N.confirmRestore, name, function () {
+        afterAction(fetch('/action/backups/restore-files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dest: dest, name: name, paths: paths }),
+        }));
+      }, false);
+    }
+  </script>
+</body>
+</html>

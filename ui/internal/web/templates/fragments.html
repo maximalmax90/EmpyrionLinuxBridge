@@ -1,0 +1,932 @@
+{{define "players_fragment"}}
+{{$pc := playerColumns}}
+<div class="players-table-wrap">
+<table class="players-table">
+  <thead><tr>
+    <th data-key="name" onclick="sortPlayersTable('name')">{{t "players.col.name"}}</th>
+    {{if $pc.Faction}}<th data-key="faction" onclick="sortPlayersTable('faction')">{{t "players.col.faction"}}</th>{{end}}
+    <th data-key="playfield" onclick="sortPlayersTable('playfield')">{{t "players.col.playfield"}}</th>
+    <th data-key="system" onclick="sortPlayersTable('system')">{{t "players.col.solarSystem"}}</th>
+    {{if $pc.Coords}}
+    <th data-key="ew" data-sort-type="num" onclick="sortPlayersTable('ew')">{{t "players.col.ew"}}</th>
+    <th data-key="height" data-sort-type="num" onclick="sortPlayersTable('height')">{{t "players.col.height"}}</th>
+    <th data-key="ns" data-sort-type="num" onclick="sortPlayersTable('ns')">{{t "players.col.ns"}}</th>
+    {{end}}
+    {{if $pc.Kills}}<th data-key="kills" data-sort-type="num" onclick="sortPlayersTable('kills')">{{t "players.col.kills"}}</th>{{end}}
+    {{if $pc.Died}}<th data-key="died" data-sort-type="num" onclick="sortPlayersTable('died')">{{t "players.col.died"}}</th>{{end}}
+    {{if $pc.Credits}}<th data-key="credits" data-sort-type="num" onclick="sortPlayersTable('credits')">{{t "players.col.credits"}}</th>{{end}}
+    {{if $pc.Exp}}<th data-key="exp" data-sort-type="num" onclick="sortPlayersTable('exp')">{{t "players.col.exp"}}</th>{{end}}
+    {{if $pc.Ping}}<th data-key="ping" data-sort-type="num" onclick="sortPlayersTable('ping')">{{t "players.col.ping"}}</th>{{end}}
+    {{if $pc.LastOnline}}<th data-key="lastOnline" onclick="sortPlayersTable('lastOnline')">{{t "players.col.lastOnline"}}</th>{{end}}
+    {{if $pc.OnlineHours}}<th data-key="onlineHours" data-sort-type="num" onclick="sortPlayersTable('onlineHours')">{{t "players.col.onlineHours"}}</th>{{end}}
+  </tr></thead>
+  <tbody>
+  {{range .}}
+    <tr class="{{if .Online}}online{{else}}offline{{end}}" data-steamid="{{.SteamId}}"
+        hx-get="/action/player?entityId={{.EntityId}}&amp;steamId={{.SteamId}}&amp;name={{.Name}}"
+        hx-target="#inventory-section" hx-swap="innerHTML" hx-trigger="click[rowClickOk(event)]"
+        hx-on::after-request="showInventoryPanel(); rememberPlayer(this)" style="cursor:pointer">
+      <td data-key="name" data-sort="{{.Name}}">
+        <span class="icon-btn nfi nfi-mail" title="{{t "action.writePrivate"}}" onclick="targetPlayer('{{.Name}}')"></span>
+        {{if isSteamId64 .SteamId}}<a class="steam-link nfi nfi-extlink" href="https://steamcommunity.com/profiles/{{.SteamId}}" target="_blank" rel="noopener" title="{{t "action.steamProfile"}}"></a>{{end}}
+        {{if $pc.QuickLinks}}
+        <span class="icon-btn nfi nfi-history" title="{{t "player.action.history"}}" onclick="openHistoryModal('player', '{{.SteamId}}', '{{.Name}}')"></span>
+        <span class="icon-btn nfi nfi-home" title="{{t "player.action.structures"}}" onclick="quickLinkStructures('owner', '{{.Name}}')"></span>
+        {{end}}
+        <span title="{{t "action.showInventory"}}">{{.Name}}</span>
+      </td>
+      {{if $pc.Faction}}
+      <td data-key="faction" data-sort="{{.FactionTag}}">
+        {{if .FactionTag}}
+        <span class="icon-btn nfi nfi-mail" title="{{t "action.writeFaction"}}" onclick="targetFaction('{{.FactionTag}}')"></span>
+        {{if $pc.QuickLinks}}
+        <span class="icon-btn nfi nfi-history" title="{{t "player.action.history"}}" onclick="openHistoryModalFilter({faction: '{{.FactionTag}}'})"></span>
+        <span class="icon-btn nfi nfi-home" title="{{t "player.action.structures"}}" onclick="quickLinkStructures('faction', '{{.FactionTag}}')"></span>
+        {{end}}
+        <span title="{{.FactionName}}">[{{.FactionTag}}]</span>
+        {{end}}
+      </td>
+      {{end}}
+      <td data-key="playfield" data-sort="{{.Playfield}}">
+        {{if and $pc.QuickLinks .Playfield}}
+        <span class="icon-btn nfi nfi-history" title="{{t "player.action.history"}}" onclick="openHistoryModalFilter({playfield: '{{.Playfield}}'})"></span>
+        <span class="icon-btn nfi nfi-home" title="{{t "player.action.structures"}}" onclick="quickLinkStructures('playfield', '{{.Playfield}}')"></span>
+        {{end}}
+        {{.Playfield}}
+      </td>
+      <td data-key="system" data-sort="{{.SolarSystem}}">
+        {{if and $pc.QuickLinks .SolarSystem}}
+        <span class="icon-btn nfi nfi-history" title="{{t "player.action.history"}}" onclick="openHistoryModalFilter({system: '{{.SolarSystem}}'})"></span>
+        <span class="icon-btn nfi nfi-home" title="{{t "player.action.structures"}}" onclick="quickLinkStructures('system', '{{.SolarSystem}}')"></span>
+        {{end}}
+        {{.SolarSystem}}
+      </td>
+      {{if $pc.Coords}}
+      <td class="num" data-key="ew" data-sort="{{if .Pos}}{{.Pos.X}}{{end}}">{{if .Pos}}{{printf "%.1f" .Pos.X}}{{else}}—{{end}}</td>
+      <td class="num" data-key="height" data-sort="{{if .Pos}}{{.Pos.Y}}{{end}}">{{if .Pos}}{{printf "%.1f" .Pos.Y}}{{else}}—{{end}}</td>
+      <td class="num" data-key="ns" data-sort="{{if .Pos}}{{.Pos.Z}}{{end}}">{{if .Pos}}{{printf "%.1f" .Pos.Z}}{{else}}—{{end}}</td>
+      {{end}}
+      {{if $pc.Kills}}<td class="num" data-key="kills" data-sort="{{if .Live}}{{.Live.Kills}}{{else if and .Offline .Offline.Kills}}{{.Offline.Kills}}{{end}}">{{if .Live}}{{.Live.Kills}}{{else if and .Offline .Offline.Kills}}{{.Offline.Kills}}{{else}}—{{end}}</td>{{end}}
+      {{if $pc.Died}}<td class="num" data-key="died" data-sort="{{if .Live}}{{.Live.Died}}{{else if and .Offline .Offline.Died}}{{.Offline.Died}}{{end}}">{{if .Live}}{{.Live.Died}}{{else if and .Offline .Offline.Died}}{{.Offline.Died}}{{else}}—{{end}}</td>{{end}}
+      {{if $pc.Credits}}<td class="num" data-key="credits" data-sort="{{if .Live}}{{.Live.Credits}}{{else if and .Offline .Offline.Credits}}{{.Offline.Credits}}{{end}}">{{if .Live}}{{printf "%.0f" .Live.Credits}}{{else if and .Offline .Offline.Credits}}{{.Offline.Credits}}{{else}}—{{end}}</td>{{end}}
+      {{if $pc.Exp}}<td class="num" data-key="exp" data-sort="{{if .Live}}{{.Live.Exp}}{{else if and .Offline .Offline.Exp}}{{.Offline.Exp}}{{end}}">{{if .Live}}{{.Live.Exp}}{{else if and .Offline .Offline.Exp}}{{.Offline.Exp}}{{else}}—{{end}}</td>{{end}}
+      {{if $pc.Ping}}<td class="num" data-key="ping" data-sort="{{if .Live}}{{.Live.Ping}}{{end}}">{{if .Live}}{{.Live.Ping}}{{else}}—{{end}}</td>{{end}}
+      {{if $pc.LastOnline}}<td data-key="lastOnline" data-sort="{{if .Online}}9999-12-31T23:59:59Z{{else if .LastOnline}}{{.LastOnline}}{{end}}">{{if .Online}}{{t "players.status.online"}}{{else if .LastOnline}}{{dateOf .LastOnline}} {{timeOf .LastOnline}}{{else}}—{{end}}</td>{{end}}
+      {{if $pc.OnlineHours}}<td class="num" data-key="onlineHours" data-sort="{{if .OnlineSeconds}}{{.OnlineSeconds}}{{end}}">{{if .OnlineSeconds}}{{printf "%.1f" (hoursOf .OnlineSeconds)}}{{else}}—{{end}}</td>{{end}}
+    </tr>
+  {{else}}
+    <tr><td colspan="20" class="empty">{{t "players.empty"}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+
+
+{{define "player_panel_fragment"}}
+{{$player := .Player}}
+{{$isBanned := and $player $player.BannedUntil}}
+{{$isMuted := and $player $player.MutedUntil}}
+<div class="player-panel">
+  <button type="button" class="player-panel-close btn-icon nfi nfi-close" onclick="closeInventory()" title="{{t "inventory.close"}}"></button>
+  <div class="player-panel-header">
+    <div class="player-title">
+      <h2>
+        {{.Name}}
+        {{with $player}}
+          {{if .Online}}<span class="badge badge-online">online</span>{{else}}<span class="badge badge-offline">offline</span>{{end}}
+        {{end}}
+      </h2>
+      <div class="player-panel-sub">
+        {{t "player.steamId"}}: {{.SteamId}}
+        {{with $player}}
+          {{if .BannedUntil}} · <span class="danger">{{t "player.banned"}} {{.BannedUntil}}</span>{{end}}
+          {{if .MutedUntil}} · <span class="danger">{{t "player.muted"}} {{dateOf .MutedUntil}} {{timeOf .MutedUntil}}</span>{{end}}
+        {{end}}
+      </div>
+    </div>
+    <div class="player-quick-actions">
+      {{if $.IsAdminPlayer}}
+      <select class="quick-role" disabled title="{{t "player.mod.role.adminLocked"}}">
+        <option selected>{{t "player.mod.role.admin"}}</option>
+      </select>
+      {{else if $.IsModeratorPlayer}}
+      <select class="quick-role" disabled title="{{t "player.mod.role.moderatorLocked"}}">
+        <option selected>{{t "player.mod.role.moderator"}}</option>
+      </select>
+      {{else}}
+      <select class="quick-role" hx-post="/action/player/setrole" hx-vals='{"steamId":"{{.SteamId}}"}' name="role" hx-target="#toast" hx-swap="innerHTML" hx-trigger="change" hx-on::after-request="refreshPlayerPanel()" title="{{t "player.mod.role"}}">
+        <option value="pl"{{if or (not $player) (not $player.Role)}} selected{{end}}>{{t "player.mod.role.player"}}</option>
+        <option value="mod"{{if and $player (eq $player.Role "moderator")}} selected{{end}}>{{t "player.mod.role.moderator"}}</option>
+        {{if $.IsAdmin}}
+        <option value="gm"{{if and $player (eq $player.Role "gamemaster")}} selected{{end}}>{{t "player.mod.role.gamemaster"}}</option>
+        {{end}}
+      </select>
+      {{end}}
+      {{if $.IsAdmin}}
+      <label class="quick-vip" title="{{t "player.mod.vip.hint"}}">
+        <input type="checkbox" id="vip-checkbox" name="vip" {{if $.IsVip}}checked{{end}}>
+        {{t "player.mod.vip"}}
+      </label>
+      {{end}}
+      {{if and $.IsAdmin $player (or $.IsAdminPlayer $.IsModeratorPlayer (eq $player.Role "gamemaster") (eq $player.Role "moderator") (eq $player.Role "admin"))}}
+      <button type="button" id="gmiv-toggle" class="btn-small" data-active="0" data-steamid="{{.SteamId}}" {{if not $player.Online}}disabled{{end}} onclick="toggleGmIv(this)" title="{{t "player.action.gmivHint"}}">{{t "player.action.gmiv"}}</button>
+      {{end}}
+      <button type="button" class="btn-small" onclick="openWarpModal({{.EntityId}}, '{{.SteamId}}', '{{.Name}}')">{{t "player.action.warp"}}</button>
+      <button type="button" class="btn-small" onclick="openHistoryModal('player', '{{.SteamId}}', '{{.Name}}')">{{t "player.action.history"}}</button>
+      <button type="button" class="btn-small" onclick="healPlayer()">{{t "player.action.heal"}}</button>
+      <button type="button" class="btn-small" {{if and $.IsAdminPlayer (not $.IsAdmin)}}disabled title="{{t "player.mod.adminProtected"}}"{{end}} onclick="openKickModal('{{.SteamId}}', '{{.Name}}')">{{t "players.action.kick"}}</button>
+      <button type="button" class="btn-small{{if $isBanned}} btn-pulse-danger{{end}}" {{if and $.IsAdminPlayer (not $.IsAdmin)}}disabled title="{{t "player.mod.adminProtected"}}"{{end}} onclick="openBanMuteModal('ban', '{{.SteamId}}', '{{.Name}}', {{if $isBanned}}true{{else}}false{{end}})">{{t "player.mod.ban.apply"}}</button>
+      <button type="button" class="btn-small{{if $isMuted}} btn-pulse-danger{{end}}" {{if and $.IsAdminPlayer (not $.IsAdmin)}}disabled title="{{t "player.mod.adminProtected"}}"{{end}} onclick="openBanMuteModal('mute', '{{.SteamId}}', '{{.Name}}', {{if $isMuted}}true{{else}}false{{end}})">{{t "player.mod.mute.apply"}}</button>
+    </div>
+  </div>
+
+  {{if .HasPending}}<div class="pending-note">{{t "player.pending.any"}}</div>{{end}}
+
+  <form id="player-apply-form" onsubmit="return false" data-online="{{if and $player $player.Online}}1{{else}}0{{end}}">
+  <input type="hidden" name="entityId" value="{{.EntityId}}">
+  <input type="hidden" name="steamId" value="{{.SteamId}}">
+
+  {{$esi := .EffectiveSetInfo}}
+  <div class="player-group-row">
+  <fieldset class="player-group player-group-wide">
+    <legend>{{t "player.group.stats"}}</legend>
+    <div class="stat-grid stat-grid-2col">
+      <label>{{t "player.stats.health"}}<div class="stat-pair"><input type="number" name="health" value="{{index $esi "health"}}"><span>/</span><input type="number" name="healthMax" value="{{index $esi "healthMax"}}"></div></label>
+      <label>{{t "player.stats.food"}}<div class="stat-pair"><input type="number" name="food" value="{{index $esi "food"}}"><span>/</span><input type="number" name="foodMax" value="{{index $esi "foodMax"}}"></div></label>
+      <label>{{t "player.stats.oxygen"}}<div class="stat-pair"><input type="number" name="oxygen" value="{{index $esi "oxygen"}}"><span>/</span><input type="number" name="oxygenMax" value="{{index $esi "oxygenMax"}}"></div></label>
+      <label>{{t "player.stats.stamina"}}<div class="stat-pair"><input type="number" name="stamina" value="{{index $esi "stamina"}}"><span>/</span><input type="number" name="staminaMax" value="{{index $esi "staminaMax"}}"></div></label>
+      <label>{{t "player.stats.radiation"}}<div class="stat-pair"><input type="number" name="radiation" value="{{index $esi "radiation"}}"><span>/</span><input type="number" name="radiationMax" value="{{index $esi "radiationMax"}}"></div></label>
+      <label>{{t "player.stats.bodyTemp"}}<div class="stat-pair"><input type="number" name="bodyTemp" value="{{index $esi "bodyTemp"}}"><span>/</span><input type="number" name="bodyTempMax" value="{{index $esi "bodyTempMax"}}"></div></label>
+    </div>
+  </fieldset>
+
+  <fieldset class="player-group player-group-narrow">
+    <legend>{{t "player.group.progress"}}</legend>
+    {{$knownCredits := index $esi "credits"}}
+    {{if not $knownCredits}}{{if and $player $player.Offline $player.Offline.Credits}}{{$knownCredits = $player.Offline.Credits}}{{end}}{{end}}
+    {{$knownExp := index $esi "experiencePoints"}}
+    {{if not $knownExp}}{{if and $player $player.Offline $player.Offline.Exp}}{{$knownExp = $player.Offline.Exp}}{{end}}{{end}}
+    <div class="stat-grid stat-grid-1col">
+      <label>{{t "player.progress.credits"}}<div class="stat-pair"><span>+</span><input type="number" id="credits-delta" value="0"><span class="dim">({{if $knownCredits}}{{$knownCredits}}{{else}}?{{end}})</span></div></label>
+      <label>{{t "player.progress.exp"}}<div class="stat-pair"><span>+</span><input type="number" id="exp-delta" value="0" data-current="{{$knownExp}}"><span class="dim">({{if $knownExp}}{{$knownExp}}{{else}}?{{end}})</span></div></label>
+      <label>{{t "player.progress.upgrade"}}<input type="number" name="upgradePoints" value="{{index $esi "upgradePoints"}}" class="dur-input"></label>
+    </div>
+  </fieldset>
+  </div>
+
+  <fieldset class="player-group">
+    <legend>{{t "player.group.faction"}}</legend>
+    <input type="hidden" name="factionGroup" value="0">
+    <div class="stat-grid">
+      <label>{{t "player.faction.faction"}}
+        <select name="factionId">
+          <option value="">{{t "composer.faction.placeholder"}}</option>
+          {{range .Factions}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) (index $esi "factionId")}} selected{{end}}>[{{.Abbreviation}}] {{.Name}}</option>{{end}}
+        </select>
+      </label>
+      <label>{{t "player.faction.role"}}
+        <select name="factionRole">
+          <option value="">{{t "player.faction.role.keep"}}</option>
+          <option value="0"{{if eq (index $esi "factionRole") "0"}} selected{{end}}>{{t "player.faction.role.founder"}}</option>
+          <option value="1"{{if eq (index $esi "factionRole") "1"}} selected{{end}}>{{t "player.faction.role.admin"}}</option>
+          <option value="2"{{if eq (index $esi "factionRole") "2"}} selected{{end}}>{{t "player.faction.role.member"}}</option>
+          <option value="3"{{if eq (index $esi "factionRole") "3"}} selected{{end}}>{{t "player.faction.role.apprentice"}}</option>
+        </select>
+      </label>
+    </div>
+  </fieldset>
+  </form>
+
+  <fieldset class="player-group">
+    <legend>{{t "player.group.factory"}}</legend>
+    {{if and .FactoryKnown .FactoryInFactory}}
+    <div class="mod-row factory-status-row">
+      <span>{{t "player.factory.inFactory"}} {{.FactoryInFactory}} ({{printf "%.0f" .FactoryRemaining}}s)</span>
+      {{if .FactoryOnline}}<button type="button" class="btn-small" onclick="finishFactory({{.EntityId}})">{{t "player.factory.finish"}}</button>{{end}}
+    </div>
+    {{else if .FactoryKnown}}
+    <div class="dim">{{t "player.factory.empty"}}</div>
+    {{else}}
+    <div class="dim">—</div>
+    {{end}}
+    <div id="factory-resources-wrap" style="display:none">
+      <div class="inventory-section-label">{{t "player.factory.resources"}}</div>
+      <div id="factory-resources" class="factory-resources"></div>
+    </div>
+  </fieldset>
+
+  <fieldset class="player-group" id="inventory-group">
+    <legend>{{t "player.tab.inventory"}}
+      {{if .SteamId}}<span class="icon-btn nfi nfi-history" title="{{t "player.modal.backpackRestoreTitle"}}" onclick="openBackpackRestoreModal({{.EntityId}}, '{{.SteamId}}')"></span>{{end}}
+    </legend>
+    {{if .InventoryError}}<div class="inventory-error">{{.InventoryError}}</div>{{end}}
+    <div class="inventory-section-label">{{t "inventory.toolbelt"}}{{if .InventoryPending}} <span class="inventory-pending-label">{{t "player.pending.inventory"}}</span>{{end}}</div>
+    <div class="slot-grid" id="toolbelt-grid"></div>
+    <div class="inventory-section-label">{{t "inventory.bag"}}</div>
+    <div class="slot-grid" id="bag-grid"></div>
+  </fieldset>
+
+  <script>
+    initInventoryEditor({{.EntityId}}, {{.SteamId}}, {{.ToolbeltJSON}}, {{.BagJSON}}, {{.ItemIDsJSON}}, {{.StackSizesJSON}}, {{.CategoriesJSON}}, {{.AmmoTypesJSON}}, {{not .InventoryError}}, {{.InventoryPending}}, {{.BeforeToolbeltJSON}}, {{.BeforeBagJSON}}, {{.FactoryResourcesJSON}}, {{.DisplayNamesJSON}}, {{.DescriptionsJSON}});
+  </script>
+
+  {{if .IsAdmin}}
+  <fieldset class="player-group" id="console-group" {{if not $player.Online}}disabled{{end}}>
+    <legend>{{t "player.tab.console"}}</legend>
+    <form id="console-form" onsubmit="return sendConsoleCommand(event, '{{.SteamId}}')">
+      <input type="text" id="console-command" placeholder="{{t "player.console.placeholder"}}" class="console-input">
+      <button type="submit" class="btn-small">{{t "player.console.send"}}</button>
+    </form>
+    <div class="task-form" style="margin-top:6px">
+      <button type="button" class="btn-small" onclick="openActivateChapterModal('{{.SteamId}}')">{{t "player.console.activateChapter"}}</button>
+    </div>
+  </fieldset>
+  {{end}}
+
+  <div class="player-apply-row">
+    <button type="button" class="btn-small" onclick="refreshPlayerPanel()">{{t "player.cancel"}}</button>
+    <button type="button" class="btn-small btn-primary" onclick="applyPlayerChanges()">{{t "player.apply"}}</button>
+  </div>
+</div>
+{{end}}
+
+{{define "players_count_fragment"}}({{onlineCount .}} {{t "players.onlineSuffix"}}){{end}}
+
+{{define "chat_fragment"}}
+<table class="chat-table">
+  <thead><tr><th class="col-compact">{{t "chat.col.time"}}</th><th class="col-compact">{{t "chat.col.channel"}}</th><th class="col-compact">{{t "chat.col.player"}}</th><th>{{t "chat.col.message"}}</th></tr></thead>
+  <tbody>
+  {{range .}}
+    {{if .SessionStart}}
+    <tr class="chat-restart-row"><td colspan="4">{{t "chat.restartDivider"}} — {{dateOf .Timestamp}} {{timeOf .Timestamp}}</td></tr>
+    {{else}}
+    {{$isBanner := eq .Channel "banner"}}
+    {{$sc := ""}}{{if not $isBanner}}{{$sc = senderClass .SteamId}}{{end}}
+    <tr class="chat-row channel-{{.Channel}}{{if $isBanner}} priority-{{.Priority}}{{end}}{{if and (not $isBanner) (eq .SteamId "")}} sender-server{{end}}"{{if $sc}} style="background: color-mix(in srgb, var(--sender-{{$sc}}, var(--ch-{{.Channel}})) {{if eq .Channel "server"}}24{{else}}22{{end}}%, transparent)"{{end}}>
+      <td class="col-compact chat-time">{{timeOf .Timestamp}}</td>
+      {{if $isBanner}}
+      <td class="col-compact chat-channel" colspan="2">
+        <span class="icon-btn nfi nfi-history" title="{{t "chat.action.historyChannel"}}" onclick="openChatHistoryModal({channel: 'banner'})"></span>
+        {{bannerPriorityLabel .Priority}}
+      </td>
+      {{else}}
+      <td class="col-compact chat-channel">
+        <span class="icon-btn nfi nfi-history" title="{{t "chat.action.historyChannel"}}" onclick="openChatHistoryModal({channel: '{{.Channel}}', target: '{{.Target}}'})"></span>
+        {{if eq .Channel "faction"}}
+          {{if .Target}}<span class="clickable" title="{{t "chat.action.writeFaction"}}" onclick="targetFaction('{{.Target}}')">[{{.Target}}]</span>{{else}}{{channelLabel .Channel}}{{end}}
+        {{else}}{{channelLabel .Channel}}{{end}}
+      </td>
+      <td class="col-compact">
+        <span class="icon-btn nfi nfi-history" title="{{t "chat.action.history"}}" onclick="openChatHistoryModal({steamId: '{{.SteamId}}', sender: '{{.Sender}}'})"></span>
+        {{if .SteamId}}
+        <span class="clickable" title="{{t "action.writePrivate"}}" onclick="targetPlayer('{{.Sender}}')">{{.Sender}}</span>
+        {{if isSteamId64 .SteamId}}<a class="steam-link nfi nfi-extlink" href="https://steamcommunity.com/profiles/{{.SteamId}}" target="_blank" rel="noopener" title="{{t "action.steamProfile"}}"></a>{{end}}
+        {{else}}{{.Sender}}{{end}}
+      </td>
+      {{end}}
+      <td class="col-message">{{.Text}}{{if and (eq .Channel "singleplayer") .Target}} <span class="chat-target">(<span class="nfi nfi-inline nfi-arrow-right"></span> {{.Target}})</span>{{end}}</td>
+    </tr>
+    {{end}}
+  {{else}}
+    <tr><td colspan="4" class="empty">{{t "chat.empty"}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{define "sidebar_nav"}}
+<div class="brand">
+  <span class="brand-full">Empyrion Linux Bridge</span><span class="brand-icon">ELB</span>
+</div>
+<div class="nav-scroll-wrap" id="sidebar-nav-wrap">
+  <button type="button" class="nav-scroll-btn nav-scroll-up nfi nfi-chevron-up" id="sidebar-nav-scroll-up" title="{{t "nav.scrollUp"}}" aria-label="{{t "nav.scrollUp"}}"></button>
+  <nav id="sidebar-nav-list">
+  <a href="/" class="{{if eq .Page "overview"}}active{{end}}" title="{{t "nav.overview"}}"><span class="nav-icon nfi nfi-dashboard"></span><span class="nav-label">{{t "nav.overview"}}</span></a>
+  <div id="sidebar-nav-blocked-group" class="{{if .DaemonUnreachable}}daemon-blocked{{end}}" {{if .DaemonUnreachable}}inert title="{{t "nav.daemonUnreachableBlocked"}}"{{end}}>
+  {{if or .IsAdmin .Perms.Structures}}
+  <a href="/structures" class="{{if eq .Page "structures"}}active{{end}}" title="{{t "nav.structures"}}"><span class="nav-icon nfi nfi-home"></span><span class="nav-label">{{t "nav.structures"}}</span></a>
+  {{end}}
+  {{if or .IsAdmin .Perms.History}}
+  <a href="/history" class="{{if eq .Page "history"}}active{{end}}" title="{{t "nav.history"}}"><span class="nav-icon nfi nfi-history"></span><span class="nav-label">{{t "nav.history"}}</span></a>
+  {{end}}
+  {{if or .IsAdmin .Perms.ChatHistory}}
+  <a href="/chat-history" class="{{if eq .Page "chatHistory"}}active{{end}}" title="{{t "nav.chatHistory"}}"><span class="nav-icon nfi nfi-mail"></span><span class="nav-label">{{t "nav.chatHistory"}}</span></a>
+  {{end}}
+  {{if or .IsAdmin .Perms.Journal}}
+  <a href="/journal" class="{{if eq .Page "journal"}}active{{end}}" title="{{t "nav.journal"}}"><span class="nav-icon nfi nfi-journal"></span><span class="nav-label">{{t "nav.journal"}}</span></a>
+  {{end}}
+  {{if .IsAdmin}}
+  <a href="/scheduler" class="{{if eq .Page "scheduler"}}active{{end}}" title="{{t "nav.scheduler"}}"><span class="nav-icon nfi nfi-calendar-clock"></span><span class="nav-label">{{t "nav.scheduler"}}</span></a>
+  <a href="/backups" class="{{if eq .Page "backups"}}active{{end}}" title="{{t "nav.backups"}}"><span class="nav-icon nfi nfi-cloud"></span><span class="nav-label">{{t "nav.backups"}}</span></a>
+  <a href="/queues" class="{{if eq .Page "queues"}}active{{end}}" title="{{t "nav.queues"}}"><span class="nav-icon nfi nfi-queue"></span><span class="nav-label">{{t "nav.queues"}}</span></a>
+  <a href="/maintenance" class="{{if eq .Page "maintenance"}}active{{end}}" title="{{t "nav.maintenance"}}"><span class="nav-icon nfi nfi-tools"></span><span class="nav-label">{{t "nav.maintenance"}}</span></a>
+  <a href="/monitoring" class="{{if eq .Page "monitoring"}}active{{end}}" title="{{t "nav.monitoring"}}"><span class="nav-icon nfi nfi-monitoring"></span><span class="nav-label">{{t "nav.monitoring"}}</span></a>
+  {{end}}
+  {{if or .IsAdmin .Perms.ChatbotBasic .Perms.PanelBasic}}
+  <a href="/settings" class="{{if eq .Page "settings"}}active{{end}}" title="{{t "nav.settings"}}"><span class="nav-icon nfi nfi-cog"></span><span class="nav-label">{{t "nav.settings"}}</span></a>
+  {{end}}
+  </div>
+  {{if .IsAdmin}}
+  <a href="/accounts" class="{{if eq .Page "accounts"}}active{{end}}" title="{{t "nav.accounts"}}"><span class="nav-icon nfi nfi-accounts"></span><span class="nav-label">{{t "nav.accounts"}}</span></a>
+  {{end}}
+  </nav>
+  <button type="button" class="nav-scroll-btn nav-scroll-down nfi nfi-chevron-down" id="sidebar-nav-scroll-down" title="{{t "nav.scrollDown"}}" aria-label="{{t "nav.scrollDown"}}"></button>
+</div>
+<script>
+  (function () {
+    var nav = document.getElementById('sidebar-nav-list');
+    var wrap = document.getElementById('sidebar-nav-wrap');
+    var up = document.getElementById('sidebar-nav-scroll-up');
+    var down = document.getElementById('sidebar-nav-scroll-down');
+    if (!nav || !wrap || !up || !down) return;
+    function update() {
+      var overflow = nav.scrollHeight > nav.clientHeight + 1;
+      wrap.classList.toggle('has-overflow', overflow);
+      up.disabled = nav.scrollTop <= 0;
+      down.disabled = nav.scrollTop + nav.clientHeight >= nav.scrollHeight - 1;
+    }
+    function scrollByPage(dir) {
+      nav.scrollTop += dir * Math.round(nav.clientHeight * 0.6);
+    }
+    up.addEventListener('click', function () { scrollByPage(-1); });
+    down.addEventListener('click', function () { scrollByPage(1); });
+    nav.addEventListener('scroll', update);
+    if (window.ResizeObserver) {
+      new ResizeObserver(update).observe(nav);
+    } else {
+      window.addEventListener('resize', update);
+    }
+    update();
+  })();
+  function syncDaemonReachabilityGate() {
+    var group = document.getElementById('sidebar-nav-blocked-group');
+    if (!group) return;
+    var badge = document.querySelector('.state-badge');
+    var unreachable = !!badge && badge.classList.contains('state-unreachable');
+    group.inert = unreachable;
+    group.classList.toggle('daemon-blocked', unreachable);
+  }
+  document.body.addEventListener('htmx:wsAfterMessage', syncDaemonReachabilityGate);
+</script>
+<div class="sidebar-monitor" id="sidebar-monitor">{{template "sidebar_monitor" .}}</div>
+<div class="sidebar-bottom">
+  <div class="sidebar-clock" id="sidebar-clock" title="{{t "status.serverTime.title"}}">
+    <span class="sidebar-clock-full" id="sidebar-clock-full">{{nowLocal}}</span>
+    <div class="sidebar-clock-compact">
+      <span class="sidebar-clock-time" id="sidebar-clock-time"></span>
+      <span class="sidebar-clock-daymonth" id="sidebar-clock-daymonth"></span>
+      <span class="sidebar-clock-year" id="sidebar-clock-year"></span>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var full = document.getElementById('sidebar-clock-full');
+      var timeEl = document.getElementById('sidebar-clock-time');
+      var dmEl = document.getElementById('sidebar-clock-daymonth');
+      var yEl = document.getElementById('sidebar-clock-year');
+      var m = full.textContent.trim().match(/^(\d{2})\.(\d{2})\.(\d{4}) (\d{2}):(\d{2}):(\d{2})$/);
+      if (!m) return;
+      var t = new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +m[6]);
+      function pad(n) { return n < 10 ? '0' + n : '' + n; }
+      function render() {
+        var dd = pad(t.getDate()), mo = pad(t.getMonth() + 1), yyyy = t.getFullYear();
+        var hh = pad(t.getHours()), mi = pad(t.getMinutes()), ss = pad(t.getSeconds());
+        full.textContent = dd + '.' + mo + '.' + yyyy + ' ' + hh + ':' + mi + ':' + ss;
+        timeEl.textContent = hh + ':' + mi;
+        dmEl.textContent = dd + '.' + mo;
+        yEl.textContent = yyyy;
+      }
+      function resync() {
+        fetch('/action/server-time')
+          .then(function (r) { return r.text(); })
+          .then(function (text) {
+            var rm = text.trim().match(/^(\d{2})\.(\d{2})\.(\d{4}) (\d{2}):(\d{2}):(\d{2})$/);
+            if (!rm) return;
+            t = new Date(+rm[3], +rm[2] - 1, +rm[1], +rm[4], +rm[5], +rm[6]);
+            render();
+          })
+          .catch(function () {});
+      }
+      render();
+      setInterval(function () { t.setSeconds(t.getSeconds() + 1); render(); }, 1000);
+      setInterval(resync, 60000);
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) resync(); });
+    })();
+  </script>
+  <div class="sidebar-footer">
+    {{if or .DaemonVersion .UIVersion}}
+    <div class="brand-version">
+      {{if .DaemonVersion}}<div>{{t "sidebar.daemonVersion"}} {{.DaemonVersion}}</div>{{end}}
+      {{if .UIVersion}}<div>{{t "sidebar.uiVersion"}} {{.UIVersion}}</div>{{end}}
+    </div>
+    {{end}}
+    <button class="sidebar-toggle nfi nfi-collapse-left" id="sidebar-toggle" title="{{t "sidebar.toggle"}}"></button>
+  </div>
+</div>
+{{end}}
+
+{{define "sidebar_monitor"}}
+{{$warn := .WarningPercent}}
+{{$crit := .CriticalPercent}}
+{{$cpu := .SysInfo.CPUPercent}}
+{{$mem := pctOf .SysInfo.MemUsedBytes .SysInfo.MemTotalBytes}}
+{{$memTotal := gb .SysInfo.MemTotalBytes}}
+{{$swap := pctOf .SysInfo.SwapUsedBytes .SysInfo.SwapTotalBytes}}
+{{$wa := .SysInfo.IOWaitPercent}}
+{{$pfPct := intPct .Playfields.Active .Playfields.Total}}
+<div class="sidemon-row {{gaugeClass $cpu $warn $crit}}" style="--sidemon-pct:{{printf "%.0f" $cpu}}%" title="{{t "status.cpu.title"}}">
+  <span class="sidemon-label-full">{{t "status.cpu.title"}}</span>
+  <span class="sidemon-label-compact">CPU</span>
+  <span class="sidemon-val-full">{{printf "%.0f" $cpu}}%</span>
+  <span class="sidemon-val-compact">{{printf "%.0f" $cpu}}%</span>
+</div>
+<div class="sidemon-row {{gaugeClass $mem $warn $crit}}" style="--sidemon-pct:{{printf "%.0f" $mem}}%" title="{{t "status.ram.title"}}">
+  <span class="sidemon-label-full">{{t "status.ram.title"}}</span>
+  <span class="sidemon-label-compact">RAM</span>
+  <span class="sidemon-val-full">{{gb .SysInfo.MemUsedBytes}}/{{$memTotal}}G</span>
+  <span class="sidemon-val-compact">{{printf "%.0f" $mem}}%</span>
+</div>
+{{if .SysInfo.SwapTotalBytes}}
+<div class="sidemon-row {{gaugeClass $swap $warn $crit}}" style="--sidemon-pct:{{printf "%.0f" $swap}}%" title="{{t "status.swap.title"}}">
+  <span class="sidemon-label-full">{{t "status.swap.title"}}</span>
+  <span class="sidemon-label-compact">SWP</span>
+  <span class="sidemon-val-full">{{gb .SysInfo.SwapUsedBytes}}/{{gb .SysInfo.SwapTotalBytes}}G</span>
+  <span class="sidemon-val-compact">{{printf "%.0f" $swap}}%</span>
+</div>
+{{end}}
+<div class="sidemon-row {{gaugeClass $pfPct $warn $crit}}" style="--sidemon-pct:{{printf "%.0f" $pfPct}}%" title="{{t "status.playfields.title"}}">
+  <span class="sidemon-label-full">{{t "status.playfields.shortTitle"}}</span>
+  <span class="sidemon-label-compact">PFs</span>
+  <span class="sidemon-val-full sidemon-val-push">{{.Playfields.Active}}/{{.Playfields.Total}}</span>
+  <span class="sidemon-val-compact">{{printf "%.0f" $pfPct}}%</span>
+</div>
+<div class="sidemon-row {{gaugeClass $wa $warn $crit}}" style="--sidemon-pct:{{printf "%.0f" $wa}}%" title="{{t "status.wa.shortTitle"}}">
+  <span class="sidemon-label-full">{{t "status.wa.shortTitle"}}</span>
+  <span class="sidemon-label-compact">DSK</span>
+  <span class="sidemon-val-full">{{printf "%.0f" $wa}}%</span>
+  <span class="sidemon-val-compact">{{printf "%.0f" $wa}}%</span>
+</div>
+{{range $i, $m := .ActiveMounts}}
+{{$pct := pctOf $m.UsedBytes $m.TotalBytes}}
+<div class="sidemon-row {{gaugeClass $pct $warn $crit}}" style="--sidemon-pct:{{printf "%.0f" $pct}}%" title="{{$m.Mountpoint}} ({{$m.FSType}})">
+  <span class="sidemon-label-full">{{mountLabel $m.Mountpoint}}</span>
+  <span class="sidemon-label-compact">FS{{inc $i}}</span>
+  <span class="sidemon-val-full">{{gb $m.UsedBytes}}/{{gb $m.TotalBytes}}G</span>
+  <span class="sidemon-val-compact">{{printf "%.0f" $pct}}%</span>
+</div>
+{{end}}
+{{end}}
+
+{{define "notif_dropdown_inner"}}
+<div class="notif-dropdown-header">
+  <span>{{t "notif.title"}}</span>
+  <div class="notif-dropdown-actions">
+    <button type="button" class="btn-small" onclick="markAllNotificationsRead()">{{t "notif.markAllRead"}}</button>
+    <button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "notif.clearAll"}}" onclick="clearAllNotifications()"></button>
+  </div>
+</div>
+<ul class="notif-list">
+  {{range .}}
+  <li class="notif-item notif-{{.Level}}{{if not .Read}} unread{{end}}"{{if not .Read}} onclick="markNotificationRead({{.ID}})"{{end}}>
+    <span class="notif-time">{{localTime .CreatedAt "02.01 15:04"}}</span>
+    <span class="notif-text">{{.Text}}</span>
+  </li>
+  {{else}}
+  <li class="empty">{{t "notif.empty"}}</li>
+  {{end}}
+</ul>
+{{end}}
+
+{{define "user_menu"}}
+<div class="user">
+  <span class="status-item" id="topbar-ip" title="{{t "status.externalIp.title"}}"><i class="nf nf-ip"></i>{{if .Identity.ExternalIP}}{{.Identity.ExternalIP}}{{else}}?{{end}}</span>
+  <div class="notif-menu">
+    <button type="button" class="icon-btn nfi nfi-bell notif-bell" title="{{t "notif.title"}}" onclick="toggleNotifDropdown()"><span id="notif-badge" class="notif-badge{{if not .UnreadCount}} hidden{{end}}">{{if .UnreadCount}}{{.UnreadCount}}{{end}}</span></button>
+    <div class="notif-dropdown" id="notif-dropdown" style="display:none">
+      <div id="notif-dropdown-inner">{{template "notif_dropdown_inner" .Notifications}}</div>
+    </div>
+  </div>
+  <form class="profile-form" method="post" action="/action/profile/preferences">
+    <input type="hidden" name="theme" id="theme-input" value="{{.Theme}}">
+    <button type="button" class="btn-icon theme-toggle" title="{{if eq .Theme "dark"}}{{t "user.theme.switchToLight"}}{{else}}{{t "user.theme.switchToDark"}}{{end}}" onclick="var i=document.getElementById('theme-input'); i.value = i.value==='dark' ? 'light' : 'dark'; this.form.submit();">
+      {{if eq .Theme "dark"}}
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      {{else}}
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      {{end}}
+    </button>
+    <select name="locale" onchange="this.form.submit()" title="{{t "user.locale"}}">
+      {{$loc := .Locale}}
+      {{range .Languages}}<option value="{{.}}"{{if eq . $loc}} selected{{end}}>{{localeName .}}</option>{{end}}
+    </select>
+  </form>
+  {{.Username}}
+  <a href="/change-password">{{t "user.changePassword"}}</a>
+  <a href="/logout">{{t "topbar.logout"}}</a>
+</div>
+{{end}}
+
+{{define "chat_color_vars"}}<style>
+:root {
+  --ch-global: {{.Light.Global}};
+  --ch-faction: {{.Light.Faction}};
+  --ch-alliance: {{.Light.Alliance}};
+  --ch-server: {{.Light.Server}};
+  --ch-singleplayer: {{.Light.Singleplayer}};
+  --ch-banner-alarm: {{.LightBanner.Alarm}};
+  --ch-banner-message: {{.LightBanner.Message}};
+  --ch-banner-info: {{.LightBanner.Info}};
+  {{if .LightSenders.Server}}--sender-server: {{.LightSenders.Server}};{{end}}
+  {{if .LightSenders.Admin}}--sender-admin: {{.LightSenders.Admin}};{{end}}
+  {{if .LightSenders.VIP}}--sender-vip: {{.LightSenders.VIP}};{{end}}
+}
+html[data-theme="dark"] {
+  --ch-global: {{.Dark.Global}};
+  --ch-faction: {{.Dark.Faction}};
+  --ch-alliance: {{.Dark.Alliance}};
+  --ch-server: {{.Dark.Server}};
+  --ch-singleplayer: {{.Dark.Singleplayer}};
+  --ch-banner-alarm: {{.DarkBanner.Alarm}};
+  --ch-banner-message: {{.DarkBanner.Message}};
+  --ch-banner-info: {{.DarkBanner.Info}};
+  {{if .DarkSenders.Server}}--sender-server: {{.DarkSenders.Server}};{{end}}
+  {{if .DarkSenders.Admin}}--sender-admin: {{.DarkSenders.Admin}};{{end}}
+  {{if .DarkSenders.VIP}}--sender-vip: {{.DarkSenders.VIP}};{{end}}
+}
+</style>{{end}}
+
+{{define "statusbar_fragment"}}
+<div class="topbar-status" id="topbar-status">
+  {{template "topbar_status_inner" .}}
+</div>
+{{end}}
+
+
+{{define "topbar_status_inner"}}
+{{$state := serverState .Health .ManualAction.Type .DaemonUnreachable}}
+{{$busy := or (ne .ManualAction.Type "") .DaemonUnreachable}}
+<button type="button"
+  class="icon-btn server-action-btn nfi {{if .Health.Active}}nfi-stop{{else}}nfi-play{{end}}"
+  title="{{if .DaemonUnreachable}}{{t "state.daemonUnreachable"}}{{else if .Health.Active}}{{t "server.action.stop"}}{{else}}{{t "server.action.start"}}{{end}}"
+  {{if or $busy .Health.StartInProgress}}disabled{{end}}
+  {{if .Health.Active}}
+  data-confirm-title="{{t "server.action.stopConfirm.title"}}"
+  data-confirm-body="{{t "server.action.stopConfirm.body"}}"
+  data-confirm-label="{{t "modal.confirm"}}"
+  data-cancel-label="{{t "modal.cancel"}}"
+  data-confirm-action="/action/server/stop"
+  onclick="openRestartConfirm(this)"
+  {{else}}
+  onclick="this.disabled=true"
+  hx-post="/action/server/start"
+  hx-target="#topbar-status" hx-swap="innerHTML"
+  {{end}}
+></button>
+<button type="button"
+  class="icon-btn server-action-btn nfi nfi-refresh"
+  title="{{if .DaemonUnreachable}}{{t "state.daemonUnreachable"}}{{else}}{{t "server.action.restart"}}{{end}}"
+  {{if or $busy (not .Health.Active)}}disabled{{end}}
+  data-confirm-title="{{t "server.action.restartConfirm.title"}}"
+  data-confirm-body="{{t "server.action.restartConfirm.body"}}"
+  data-confirm-label="{{t "modal.confirm"}}"
+  data-cancel-label="{{t "modal.cancel"}}"
+  data-confirm-action="/action/server/restart"
+  onclick="openRestartConfirm(this)"
+></button>
+<span class="badge state-badge {{$state.Class}}">{{$state.Label}}</span>
+{{if .Identity.ServerName}}<span class="status-name" title="{{.Identity.ServerName}}">{{.Identity.ServerName}}</span>{{end}}
+{{if .Health.Version}}<span class="status-item dim">{{.Health.Version}}</span>{{end}}
+{{end}}
+
+{{define "simple_log_rows"}}
+<table class="log-table">
+  <tbody>
+  {{range .}}
+    <tr class="log-row{{if .Severity}} log-sev-{{.Severity}}{{end}}" data-sev="{{.Severity}}">
+      <td class="col-compact log-time">{{localTime .Time "02.01.2006 15:04:05"}}</td>
+      <td class="log-text">{{.Text}}</td>
+    </tr>
+  {{else}}
+    <tr><td class="empty">{{t "logs.empty"}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{define "server_log_rows"}}
+<table class="log-table">
+  <tbody>
+  {{range .}}
+    <tr class="log-row log-cat-{{.Category}}{{if .Severity}} log-sev-{{.Severity}}{{end}}" data-cat="{{.Category}}" data-sev="{{.Severity}}">
+      <td class="col-compact log-time">{{localTime .Time "02.01.2006 15:04"}}</td>
+      <td class="log-text">{{.Text}}</td>
+    </tr>
+  {{else}}
+    <tr><td class="empty">{{t "logs.empty"}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{define "logs_fragment"}}
+<div class="logs-tabs">
+  <button type="button" class="log-tab active" data-tab="daemon" onclick="setLogTab('daemon')">{{t "logs.tab.daemon"}}</button>
+  <button type="button" class="log-tab" data-tab="mod" onclick="setLogTab('mod')">{{t "logs.tab.mod"}}</button>
+  <button type="button" class="log-tab" data-tab="webui" onclick="setLogTab('webui')">{{t "logs.tab.webui"}}</button>
+  <button type="button" class="log-tab" data-tab="server" onclick="setLogTab('server')">{{t "logs.tab.server"}}</button>
+  <button type="button" class="log-tab" data-tab="scheduler" onclick="setLogTab('scheduler')">{{t "logs.tab.scheduler"}}</button>
+  {{if .AuditEnabled}}
+  <button type="button" class="log-tab" data-tab="audit" onclick="setLogTab('audit')">{{t "logs.tab.audit"}}</button>
+  {{end}}
+  {{if .JournalDateControls}}
+  <span class="journal-date-controls">
+    <input type="date" id="journal-date" list="journal-date-list-server" title="{{t "journal.date"}}">
+    <datalist id="journal-date-list-server">{{range .ServerLogDates}}<option value="{{.}}">{{end}}</datalist>
+    <datalist id="journal-date-list-daemon">{{range .DaemonLogDates}}<option value="{{.}}">{{end}}</datalist>
+    <datalist id="journal-date-list-webui">{{range .WebUILogDates}}<option value="{{.}}">{{end}}</datalist>
+    <button type="button" id="journal-date-load" class="nfi nfi-check" title="{{t "journal.load"}}"></button>
+    <button type="button" id="journal-date-today" class="nfi nfi-calendar-clock" title="{{t "journal.today"}}"></button>
+  </span>
+  {{end}}
+  {{if .LogsRefreshControls}}
+  <span class="logs-refresh-controls">
+    <select id="log-refresh-interval" title="{{t "logs.refresh.title"}}">
+      <option value="0">{{t "logs.refresh.off"}}</option>
+      <option value="3000" selected>3 {{t "logs.refresh.sec"}}</option>
+      <option value="5000">5 {{t "logs.refresh.sec"}}</option>
+      <option value="10000">10 {{t "logs.refresh.sec"}}</option>
+      <option value="30000">30 {{t "logs.refresh.sec"}}</option>
+      <option value="60000">60 {{t "logs.refresh.sec"}}</option>
+    </select>
+    <button type="button" id="log-refresh-btn" class="nfi nfi-refresh" title="{{t "logs.refresh.now"}}"></button>
+  </span>
+  {{end}}
+</div>
+<div class="log-filters-severity">
+  <label><input type="checkbox" class="log-sev-filter" value="" checked>{{t "logs.sev.normal"}}</label>
+  <label><input type="checkbox" class="log-sev-filter" value="warning" checked>{{t "logs.sev.warning"}}</label>
+  <label><input type="checkbox" class="log-sev-filter" value="critical" checked>{{t "logs.sev.critical"}}</label>
+</div>
+<div class="log-view" id="log-view-daemon">
+  <div class="log-table-wrap" id="daemon-log-inner">{{template "simple_log_rows" .DaemonLogs}}</div>
+</div>
+<div class="log-view" id="log-view-webui" style="display:none">
+  <div class="log-table-wrap" id="webui-log-inner">{{template "simple_log_rows" .WebUILogs}}</div>
+</div>
+<div class="log-view" id="log-view-server" style="display:none">
+  <div class="log-filters">
+    <label><input type="checkbox" class="log-filter" value="chat" checked>{{t "logs.cat.chat"}}</label>
+    <label><input type="checkbox" class="log-filter" value="player" checked>{{t "logs.cat.player"}}</label>
+    <label><input type="checkbox" class="log-filter" value="playfield" checked>{{t "logs.cat.playfield"}}</label>
+    <label><input type="checkbox" class="log-filter" value="save" checked>{{t "logs.cat.save"}}</label>
+    <label><input type="checkbox" class="log-filter" value="warning" checked>{{t "logs.cat.warning"}}</label>
+    <label><input type="checkbox" class="log-filter" value="error" checked>{{t "logs.cat.error"}}</label>
+    <label><input type="checkbox" class="log-filter" value="noise">{{t "logs.cat.noise"}}</label>
+    <label><input type="checkbox" class="log-filter" value="raw">{{t "logs.cat.raw"}}</label>
+  </div>
+  <div class="log-table-wrap" id="server-log-inner">{{template "server_log_rows" .ServerLog}}</div>
+</div>
+<div class="log-view" id="log-view-scheduler" style="display:none">
+  <div class="log-table-wrap" id="scheduler-log-inner">{{template "simple_log_rows" .SchedulerLog}}</div>
+</div>
+{{if .AuditEnabled}}
+<div class="log-view" id="log-view-audit" style="display:none">
+  <div class="log-table-wrap" id="audit-log-inner">{{template "simple_log_rows" .AuditLog}}</div>
+</div>
+{{end}}
+{{end}}
+
+{{define "admin_players_fragment"}}
+<ul class="admin-players-list">
+  {{range .}}
+  <li>
+    <form hx-post="/action/admin-players/remove" hx-target="#admin-players-inner" hx-swap="innerHTML">
+      <input type="hidden" name="steamId" value="{{.SteamId}}">
+      <button type="submit" class="btn-icon btn-danger nfi nfi-trash" title="{{t "adminPlayers.remove"}}"></button>
+    </form>
+    <span>{{.Name}}</span>
+  </li>
+  {{else}}
+  <li class="empty">{{t "adminPlayers.empty"}}</li>
+  {{end}}
+</ul>
+{{end}}
+
+{{define "moderator_players_fragment"}}
+<ul class="admin-players-list">
+  {{range .}}
+  <li>
+    <form hx-post="/action/moderator-players/remove" hx-target="#moderator-players-inner" hx-swap="innerHTML">
+      <input type="hidden" name="steamId" value="{{.SteamId}}">
+      <button type="submit" class="btn-icon btn-danger nfi nfi-trash" title="{{t "adminPlayers.remove"}}"></button>
+    </form>
+    <span>{{.Name}}</span>
+  </li>
+  {{else}}
+  <li class="empty">{{t "adminPlayers.empty"}}</li>
+  {{end}}
+</ul>
+{{end}}
+
+{{define "accounts_list_fragment"}}
+{{if .HasModerator}}
+<fieldset class="player-group">
+  <legend>{{t "accounts.modPerms.legend"}}</legend>
+  <div class="checkbox-list">
+    <label><input type="checkbox" id="permChatbotBasic" {{if .ModPerms.ChatbotBasic}}checked{{end}}> {{t "accounts.modPerms.chatbotBasic"}}</label>
+    <label><input type="checkbox" id="permPanelBasic" {{if .ModPerms.PanelBasic}}checked{{end}}> {{t "accounts.modPerms.panelBasic"}}</label>
+    <label><input type="checkbox" id="permStructures" {{if .ModPerms.Structures}}checked{{end}}> {{t "accounts.modPerms.structures"}}</label>
+    <label><input type="checkbox" id="permHistory" {{if .ModPerms.History}}checked{{end}}> {{t "accounts.modPerms.history"}}</label>
+    <label><input type="checkbox" id="permChatHistory" {{if .ModPerms.ChatHistory}}checked{{end}}> {{t "accounts.modPerms.chatHistory"}}</label>
+    <label><input type="checkbox" id="permJournal" {{if .ModPerms.Journal}}checked{{end}}> {{t "accounts.modPerms.journal"}}</label>
+  </div>
+</fieldset>
+{{end}}
+<table class="data-table accounts-table">
+  <thead><tr>
+    <th>{{t "accounts.col.username"}}</th>
+    <th>{{t "accounts.col.role"}}</th>
+    <th>{{t "accounts.col.status"}}</th>
+  </tr></thead>
+  <tbody>
+  {{$me := .Username}}
+  {{$adminCount := countAdmins .Accounts}}
+  {{range .Accounts}}
+    {{$isLastAdmin := and (eq .Role "admin") (eq $adminCount 1)}}
+    <tr>
+      <td><span class="accounts-name-cell">
+        {{if and (ne .Username $me) (not $isLastAdmin)}}
+        <form hx-delete="/action/accounts/{{.Username}}" hx-target="#accounts-list-inner" hx-swap="innerHTML">
+          <button type="submit" class="btn-icon btn-danger nfi nfi-trash" title="{{t "accounts.action.delete"}}"></button>
+        </form>
+        {{end}}
+        <span>{{.Username}}{{if eq .Username $me}} <span class="dim">{{t "accounts.you"}}</span>{{end}}</span>
+      </span></td>
+      <td>
+        <select class="role-select" data-username="{{.Username}}" data-original="{{.Role}}"{{if $isLastAdmin}} disabled title="{{t "accounts.lastAdminHint"}}"{{end}}>
+          <option value="moderator"{{if ne .Role "admin"}} selected{{end}}>{{t "accounts.role.moderator"}}</option>
+          <option value="admin"{{if eq .Role "admin"}} selected{{end}}>{{t "accounts.role.admin"}}</option>
+        </select>
+      </td>
+      <td class="dim">{{if .MustChangePassword}}{{t "accounts.status.pending"}}{{else}}{{t "accounts.status.active"}}{{end}}</td>
+    </tr>
+  {{else}}
+    <tr><td colspan="3" class="empty">{{t "accounts.empty"}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{define "structures_fragment"}}
+<div class="field-grid structures-filters">
+  <label>{{t "structures.filter.searchLabel"}}<input type="text" id="f-search" placeholder="{{t "structures.filter.search"}}"></label>
+  <label>{{t "players.col.playfield"}}
+    <select id="f-playfield">
+      <option value="">{{t "structures.filter.allPlayfields"}}</option>
+      {{range .PlayfieldOptions}}<option value="{{.}}">{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>{{t "player.faction.faction"}}
+    <select id="f-faction">
+      <option value="">{{t "structures.filter.allFactions"}}</option>
+      {{range .FactionOptions}}<option value="{{.}}">{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>{{t "structures.col.owner"}}
+    <select id="f-owner">
+      <option value="">{{t "structures.filter.allOwners"}}</option>
+      {{range .OwnerOptions}}<option value="{{.}}">{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>{{t "structures.col.type"}}
+    <select id="f-type">
+      <option value="">{{t "structures.filter.allTypes"}}</option>
+      {{range .TypeOptions}}<option value="{{.}}">{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>{{t "structures.filter.pageSize"}}<input type="number" id="f-page-size" value="50" min="1"></label>
+  <select id="f-faction-all" style="display:none" aria-hidden="true">
+    {{range .FactionAllOptions}}<option value="{{.}}">{{.}}</option>{{end}}
+  </select>
+  <label class="field-grid-baseline"><span class="invisible-label">&nbsp;</span><span class="baseline-content"><input type="checkbox" id="f-poi">{{t "structures.filter.showPoi"}}</span></label>
+  <label class="field-grid-baseline"><span class="invisible-label">&nbsp;</span><span class="baseline-content"><input type="checkbox" id="f-deleted">{{t "structures.filter.showDeleted"}}</span></label>
+  <span class="field-grid-baseline"><span class="invisible-label">&nbsp;</span><span class="baseline-content" id="structures-count"></span></span>
+</div>
+
+<div class="table-scroll">
+  <table class="structures-table">
+    <thead>
+      <tr>
+        <th>{{t "structures.col.id"}}</th>
+        <th>{{t "structures.col.name"}}</th>
+        <th>{{t "structures.col.type"}}</th>
+        <th>{{t "structures.col.playfield"}}</th>
+        <th>{{t "structures.col.owner"}}</th>
+        <th>{{t "structures.col.class"}}</th>
+        <th>{{t "structures.col.blocksDevices"}}</th>
+        <th>{{t "structures.col.powered"}}</th>
+        <th>{{t "structures.col.fuel"}}</th>
+        <th>{{t "structures.col.docked"}}</th>
+        <th title="{{t "structures.col.lastVisitedHint"}}">{{t "structures.col.lastVisited"}}</th>
+        <th>{{t "structures.col.snapshotCount"}}</th>
+        <th>{{t "structures.col.lastSnapshot"}}</th>
+        <th>{{t "structures.col.historyCount"}}</th>
+        <th>{{t "structures.col.actions"}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Structures}}
+      {{$owner := .OwnerName}}
+      {{if not $owner}}{{$owner = .FactionTag}}{{end}}
+      {{if not $owner}}{{$owner = .FactionGroupStr}}{{end}}
+      <tr data-name="{{.Name}}" data-playfield="{{.Playfield}}" data-system="{{.SolarSystem}}" data-faction="{{.FactionTag}}" data-owner="{{.OwnerName}}" data-type="{{.TypeName}}" data-poi="{{if .IsPOI}}1{{else}}0{{end}}" data-deleted="{{if .Deleted}}1{{else}}0{{end}}" class="{{if .Deleted}}row-deleted-structure{{else if .Pending}}row-pending{{end}}" {{if .Pending}}title="{{t "structures.pending"}}"{{end}}>
+        <td class="dim">{{.ID}}</td>
+        <td>{{.Name}}</td>
+        <td>{{.TypeName}}</td>
+        <td>{{.Playfield}}{{if .SolarSystem}} <span class="dim">/ {{.SolarSystem}}</span>{{end}}</td>
+        <td>{{$owner}}</td>
+        {{if .Deleted}}
+        <td>&#8212;</td>
+        <td>&#8212;</td>
+        <td>&#8212;</td>
+        <td>&#8212;</td>
+        <td>&#8212;</td>
+        <td>&#8212;</td>
+        {{else}}
+        <td>{{.ClassNr}}</td>
+        <td>{{if .IdentityID}}<span class="blocks-devices-cell" onclick="openBlocksBreakdownModal({{.IdentityID}}, {{.Name}})" title="{{t "structures.blocksBreakdownHint"}}">{{.CntBlocks}}/{{.CntDevices}}</span>{{else}}{{.CntBlocks}}/{{.CntDevices}}{{end}}</td>
+        <td>{{if .Powered}}<span class="nfi nfi-inline nfi-check"></span>{{else}}&#8212;{{end}}</td>
+        <td>{{.Fuel}}</td>
+        <td>{{if .DockedShips}}{{len .DockedShips}}{{else if .DockedTo}}<span class="nfi nfi-inline nfi-arrow-right"></span>{{if .DockedToName}}{{.DockedToName}}{{else}}{{.DockedTo}}{{end}}{{else}}&#8212;{{end}}</td>
+        <td>{{if .LastVisitedTicks}}{{.LastVisitedTicks}}{{else}}&#8212;{{end}}</td>
+        {{end}}
+        <td class="num">{{if .SnapshotCount}}{{.SnapshotCount}}{{else}}&#8212;{{end}}</td>
+        <td>{{if .LastSnapshot}}{{.LastSnapshot}}{{else}}&#8212;{{end}}</td>
+        <td>{{.HistoryCount}}</td>
+        <td>
+          <div class="structures-actions">
+            {{if .Deleted}}
+            <button type="button" class="btn-icon nfi nfi-refresh" title="{{t "structures.action.restore"}}" onclick="restoreStructure({{.IdentityID}}, {{.Name}}, false)"></button>
+            {{else}}
+            <button type="button" class="btn-icon nfi nfi-shield" title="{{t "structures.action.touch"}}" onclick="touchStructure({{.ID}}, {{.Playfield}})"></button>
+            <button type="button" class="btn-icon nfi nfi-wrench" title="{{if eq .TypeName "BA"}}{{t "structures.action.repairDisabledBA"}}{{else}}{{t "structures.action.repair"}}{{end}}" onclick="repairStructure({{.ID}}, {{.Playfield}})" {{if eq .TypeName "BA"}}disabled{{end}}></button>
+            <button type="button" class="btn-icon nfi nfi-flag" title="{{t "structures.action.faction"}}" onclick="factionStructure({{.ID}}, {{.Name}}, {{.FactionTag}})"></button>
+            <button type="button" class="btn-icon nfi nfi-cloud" title="{{t "structures.action.refuel"}}" onclick="refuelStructure({{.ID}}, {{.Playfield}}, {{.Name}})"></button>
+            <button type="button" class="btn-icon nfi nfi-move" title="{{t "structures.action.move"}}" onclick="moveStructure({{.ID}}, {{.Playfield}}, {{.Name}}, {{.Pos.X}}, {{.Pos.Y}}, {{.Pos.Z}})"></button>
+            <button type="button" class="btn-icon nfi nfi-refresh" title="{{t "structures.action.restore"}}" onclick="restoreStructure({{.IdentityID}}, {{.Name}}, true)"></button>
+            <button type="button" class="btn-icon nfi nfi-copy" title="{{t "structures.action.backupNow"}}" onclick="backupStructureNow({{.ID}}, this)"></button>
+            <button type="button" class="btn-icon nfi nfi-history" title="{{t "player.action.history"}}" onclick="openHistoryModal('structure', '{{.ID}}', {{.Name}})" {{if not .HistoryCount}}disabled{{end}}></button>
+            <button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "structures.action.destroy"}}" onclick="destroyStructure({{.ID}}, {{.Playfield}}, {{.Name}})"></button>
+            {{end}}
+          </div>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+<div class="hist-actions">
+  <span id="structures-page-info" class="dim"></span>
+  <button type="button" class="btn-small nfi nfi-chevron-left" id="structures-page-prev"></button>
+  <button type="button" class="btn-small nfi nfi-chevron-right" id="structures-page-next"></button>
+</div>
+{{end}}
+
+{{define "players_oob"}}<div id="players-panel-inner" hx-swap-oob="true">{{template "players_fragment" .}}</div>{{end}}
+{{define "players_count_oob"}}<span id="players-online-count" class="num-fixed" hx-swap-oob="true">{{template "players_count_fragment" .}}</span>{{end}}
+{{define "chat_oob"}}<div id="chat-panel-inner" hx-swap-oob="true">{{template "chat_fragment" .}}</div>{{end}}
+{{define "statusbar_oob"}}<div id="status-strip-inner" class="status-strip" hx-swap-oob="true">{{template "statusbar_fragment" .}}</div>{{end}}
+{{define "sidebar_monitor_oob"}}<div class="sidebar-monitor" id="sidebar-monitor" hx-swap-oob="true">{{template "sidebar_monitor" .}}</div>{{end}}
+{{define "topbar_ip_oob"}}<span class="status-item" id="topbar-ip" hx-swap-oob="true" title="{{t "status.externalIp.title"}}"><i class="nf nf-ip"></i>{{if .Identity.ExternalIP}}{{.Identity.ExternalIP}}{{else}}?{{end}}</span>{{end}}
+
+
+{{define "workshop_row"}}
+<tr data-id="{{.Item.PublishedFileID}}">
+  <td>{{.Item.Title}}</td>
+  <td>{{.Item.TargetPath}}</td>
+  <td>{{humanSize .Item.SizeBytes}}</td>
+  <td class="workshop-update-cell">—</td>
+  <td>
+    <button type="button" class="btn-small" onclick="workshopCheckRow(this)">{{t "maintenance.workshopCheckBtn"}}</button>
+    <button type="button" class="btn-small" onclick="workshopUpdateRow(this)">{{t "maintenance.workshopUpdateBtn"}}</button>
+    <a class="btn-small" href="/action/maintenance/steam-workshop-download?id={{.Item.PublishedFileID}}">{{t "maintenance.workshopDownloadBtn"}}</a>
+    <button type="button" class="btn-small btn-danger" onclick="workshopRemoveRow(this)"{{if eq .Item.TargetDir .CurrentScenario}} disabled title="{{t "maintenance.workshopRemoveNeedsSwitch"}}"{{end}}>{{t "maintenance.workshopRemoveBtn"}}</button>
+  </td>
+</tr>
+{{end}}
+{{define "workshop_rows"}}{{range .Items}}{{template "workshop_row" (dict "Item" . "CurrentScenario" $.CurrentScenario)}}{{end}}{{end}}
+
+{{define "configfile_row"}}
+<tr data-path="{{.Path}}" class="cfgfile-row ext-{{.Ext}}">
+  <td>{{.DisplayPath}}</td>
+  <td>{{humanSize .Size}}</td>
+  <td>{{.ModTime.Format "2006-01-02 15:04:05"}}</td>
+  <td>
+    <button type="button" class="btn-small" onclick="configFileDownloadRow(this)">{{t "maintenance.configFileDownloadBtn"}}</button>
+    <button type="button" class="btn-small btn-primary" onclick="configFileUploadRow(this)">{{t "maintenance.configFileUploadBtn"}}</button>
+  </td>
+</tr>
+{{end}}
+{{define "configfile_rows"}}{{range .}}{{template "configfile_row" .}}{{end}}{{end}}

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "nav.structures"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "structures" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content content-fill">
+        <section class="panel panel-full">
+          <h2>{{t "nav.structures"}}</h2>
+          {{template "structures_fragment" .}}
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="modal-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box" id="modal-box">
+      <button type="button" class="modal-close-corner btn-icon nfi nfi-close" onclick="closeModal()" title="{{t "modal.cancel"}}"></button>
+      <h3 id="modal-title"></h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-small" onclick="closeModal()">{{t "modal.cancel"}}</button>
+        <button type="button" class="btn-small btn-primary" id="modal-confirm-btn" style="display:none"></button>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script src="/static/history.js"></script>
+  <script src="/static/structures.js"></script>
+  <script>
+    var I18N = {
+      confirmDestroy: {{t "structures.confirmDestroy"}},
+      factionModalTitle: {{t "structures.factionModalTitle"}},
+      factionModalLabel: {{t "structures.factionModalLabel"}},
+      refuelModalTitle: {{t "structures.refuelModalTitle"}},
+      refuelModalFuel: {{t "structures.refuelModalFuel"}},
+      refuelModalOxygen: {{t "structures.refuelModalOxygen"}},
+      refuelModalPentaxid: {{t "structures.refuelModalPentaxid"}},
+      moveModalTitle: {{t "structures.moveModalTitle"}},
+      moveModalMode: {{t "structures.moveModalMode"}},
+      warpModeCoords: {{t "player.modal.warpModeCoords"}},
+      warpModePlayer: {{t "player.modal.warpModePlayer"}},
+      warpEntityLabelPlayer: {{t "player.modal.warpEntityLabelPlayer"}},
+      restoreModalTitle: {{t "structures.restoreModalTitle"}},
+      restoreModalContainers: {{t "structures.restoreModalContainers"}},
+      restoreModalStructure: {{t "structures.restoreModalStructure"}},
+      restoreModalAll: {{t "structures.restoreModalAll"}},
+      restoreModalAllWarning: {{t "structures.restoreModalAllWarning"}},
+      restoreModalConfirm: {{t "structures.restoreModalConfirm"}},
+      restoreModalDate: {{t "structures.restoreModalDate"}},
+      restoreModalSnapshot: {{t "structures.restoreModalSnapshot"}},
+      restoreModalSnapshotLoading: {{t "structures.restoreModalSnapshotLoading"}},
+      restoreModalSnapshotNone: {{t "structures.restoreModalSnapshotNone"}},
+      restoreModalSnapshotSummary: {{t "structures.restoreModalSnapshotSummary"}},
+      restoreModalSnapshotBlocks: {{t "structures.restoreModalSnapshotBlocks"}},
+      restoreModalSnapshotFuel: {{t "structures.restoreModalSnapshotFuel"}},
+      restoreModalSnapshotOxygen: {{t "structures.restoreModalSnapshotOxygen"}},
+      restoreModalSnapshotPentaxid: {{t "structures.restoreModalSnapshotPentaxid"}},
+      restoreModalPositionLabel: {{t "structures.restoreModalPositionLabel"}},
+      restoreModalPositionSnapshot: {{t "structures.restoreModalPositionSnapshot"}},
+      restoreModalPositionPlayer: {{t "structures.restoreModalPositionPlayer"}},
+      restoreModalPositionPlayerLoading: {{t "structures.restoreModalPositionPlayerLoading"}},
+      warpOffline: {{t "player.modal.warpOffline"}},
+      structuresPageInfo: {{t "structures.pager.info"}},
+
+      historyTitle: {{t "history.modal.title"}},
+      historyFrom: {{t "history.modal.from"}},
+      historyTo: {{t "history.modal.to"}},
+      historyDistance: {{t "history.modal.distance"}},
+      historyHideOnlyPos: {{t "history.modal.hideOnlyPos"}},
+      historyShow: {{t "history.modal.show"}},
+      historyLoading: {{t "history.modal.loading"}},
+      historyEmpty: {{t "history.modal.empty"}},
+      historyNew: {{t "history.modal.new"}},
+      historyDeleted: {{t "history.modal.deleted"}},
+      historyKindPlayer: {{t "history.modal.kindPlayer"}},
+      historyKindStructure: {{t "history.modal.kindStructure"}},
+      historyColTime: {{t "history.modal.colTime"}},
+      historyColKind: {{t "history.modal.colKind"}},
+      historyColName: {{t "history.modal.colName"}},
+      historyColPlayfield: {{t "history.modal.colPlayfield"}},
+      historyColDistance: {{t "history.modal.colDistance"}},
+      historyColChanges: {{t "history.modal.colChanges"}},
+      historyColCredits: {{t "history.modal.colCredits"}},
+      historyColKills: {{t "history.modal.colKills"}},
+      historyColDied: {{t "history.modal.colDied"}},
+      historyColExp: {{t "history.modal.colExp"}},
+      historyColFactionId: {{t "history.modal.colFactionId"}},
+      historyColFactionGroup: {{t "history.modal.colFactionGroup"}},
+      historyColBlocks: {{t "history.modal.colBlocks"}},
+      historyColDevices: {{t "history.modal.colDevices"}},
+      historyColTriangles: {{t "history.modal.colTriangles"}},
+      historyColLights: {{t "history.modal.colLights"}},
+      historyColPowered: {{t "history.modal.colPowered"}},
+      historyColFuel: {{t "history.modal.colFuel"}},
+      historyFilterPlayers: {{t "history.modal.filterPlayers"}},
+      historyFilterStructures: {{t "history.modal.filterStructures"}},
+      historyFilterNewStructures: {{t "history.modal.filterNewStructures"}},
+      historyFilterCharCreation: {{t "history.modal.filterCharCreation"}},
+      historyFilterWentOnline: {{t "history.modal.filterWentOnline"}},
+      historyFilterWentOffline: {{t "history.modal.filterWentOffline"}},
+      historyFilterRegular: {{t "history.modal.filterRegular"}},
+      historyFilterStructureDeleted: {{t "history.modal.filterStructureDeleted"}},
+      historyFilterPlayersGroup: {{t "history.modal.filterPlayersGroup"}},
+      historyFilterStructuresGroup: {{t "history.modal.filterStructuresGroup"}},
+      historyFilterAllPlayfields: {{t "history.modal.filterAllPlayfields"}},
+      historyFilterAllFactions: {{t "history.modal.filterAllFactions"}},
+      historyFilterFactionLabel: {{t "history.modal.filterFactionLabel"}},
+      historyFactionGroupFaction: {{t "history.modal.factionGroupFaction"}},
+      historyFactionGroupPlayer: {{t "history.modal.factionGroupPlayer"}},
+      historyFactionGroupNpc: {{t "history.modal.factionGroupNpc"}},
+      historyGroupAnchor: {{t "history.modal.groupAnchor"}},
+      historyGroupRange: {{t "history.modal.groupRange"}},
+      historyGroupEventTypes: {{t "history.modal.groupEventTypes"}},
+      historyGroupExtra: {{t "history.modal.groupExtra"}},
+      historyGroupDelta: {{t "history.modal.groupDelta"}},
+      historyFilterOnlyChanges: {{t "history.modal.filterOnlyChanges"}},
+      historyDeltaLabel: {{t "history.modal.deltaLabel"}},
+      historyDeltaValueLabel: {{t "history.modal.deltaValueLabel"}},
+      historyDeltaAny: {{t "history.modal.deltaAny"}},
+      historyEntityKindLabel: {{t "history.modal.entityKindLabel"}},
+      historyEntityKindAll: {{t "history.modal.entityKindAll"}},
+      historyEntityValueAllPlayers: {{t "history.modal.entityValueAllPlayers"}},
+      historyEntityValueAllStructures: {{t "history.modal.entityValueAllStructures"}},
+      historySystemLabel: {{t "history.modal.systemLabel"}},
+      historyFilterAllSystems: {{t "history.modal.filterAllSystems"}},
+      historyLimitLabel: {{t "history.modal.limitLabel"}},
+      historyPageInfo: {{t "history.modal.pageInfo"}},
+      modalCancel: {{t "modal.cancel"}},
+      modalConfirm: {{t "modal.confirm"}},
+      requestError: {{t "common.requestError"}},
+
+      blocksBreakdownTitle: {{t "structures.blocksBreakdownTitle"}},
+      blocksBreakdownBlocks: {{t "structures.blocksBreakdownBlocks"}},
+      blocksBreakdownDevices: {{t "structures.blocksBreakdownDevices"}},
+      blocksBreakdownEmpty: {{t "structures.blocksBreakdownEmpty"}},
+      blocksBreakdownAsOf: {{t "structures.blocksBreakdownAsOf"}}
+    };
+
+    function showModal() { document.getElementById('modal-overlay').style.display = 'flex'; }
+    function closeModal() {
+      document.getElementById('modal-overlay').style.display = 'none';
+      var modalBox = document.getElementById('modal-box');
+      modalBox.classList.remove('wide', 'fullscreen', 'blocks-breakdown-modal');
+      modalBox.style.width = '';
+      var modalActions = document.querySelector('.modal-actions');
+      if (modalActions) modalActions.style.display = '';
+    }
+
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+
+
+    (function () {
+      var qParams = new URLSearchParams(window.location.search);
+      var presets = {};
+      ['owner', 'faction', 'playfield', 'system'].forEach(function (k) {
+        if (qParams.get(k)) presets[k] = qParams.get(k);
+      });
+      structuresInitFilters(presets);
+    })();
+  </script>
+</body>
+</html>

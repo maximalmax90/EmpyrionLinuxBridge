@@ -1,0 +1,18 @@
+[Unit]
+Description=Empyrion Dedicated Server
+Requires=xvfb.service
+After=xvfb.service
+
+[Service]
+Type=simple
+ExecStartPre=+/usr/local/bin/elb-daemon scenario-cache prepare
+ExecStart=__MOUNTPOINT__/server.sh start
+ExecStop=__MOUNTPOINT__/server.sh stop
+TimeoutStopSec=60
+Restart=always
+RestartSec=5
+User=empyrion
+Group=empyrion
+
+[Install]
+WantedBy=multi-user.target

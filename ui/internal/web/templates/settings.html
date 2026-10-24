@@ -1,0 +1,1957 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "nav.settings"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+  <script src="/static/itemlabels.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "settings" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content">
+        <section class="panel panel-full">
+          <h2>{{t "nav.settings"}}</h2>
+          <div class="tab-strip">
+            {{if .IsAdmin}}
+            <button type="button" class="tab-btn{{if eq .DefaultTab "server"}} active{{end}}" data-tab="server" onclick="showTab('server')">{{t "settings.tab.server"}}</button>
+            <button type="button" class="tab-btn{{if eq .DefaultTab "gameplay"}} active{{end}}" data-tab="gameplay" onclick="showTab('gameplay')">{{t "settings.tab.gameplay"}}</button>
+            {{end}}
+            {{if or .IsAdmin .Perms.ChatbotBasic}}
+            <button type="button" class="tab-btn{{if eq .DefaultTab "chatbot"}} active{{end}}" data-tab="chatbot" onclick="showTab('chatbot')">{{t "settings.tab.chatbot"}}</button>
+            {{end}}
+            {{if or .IsAdmin .Perms.PanelBasic}}
+            <button type="button" class="tab-btn{{if eq .DefaultTab "panel"}} active{{end}}" data-tab="panel" onclick="showTab('panel')">{{t "settings.tab.panel"}}</button>
+            {{end}}
+            {{if .IsAdmin}}
+            <button type="button" class="tab-btn{{if eq .DefaultTab "backup"}} active{{end}}" data-tab="backup" onclick="showTab('backup')">{{t "settings.tab.backup"}}</button>
+            {{end}}
+          </div>
+
+          {{$srv := .Config.Server}}
+          {{$cb := .Config.Chatbot}}
+
+          {{if .IsAdmin}}
+          <div id="tab-server" class="tab-pane"{{if ne .DefaultTab "server"}} style="display:none"{{end}}>
+            <form class="task-form" onsubmit="return false">
+              <label>{{t "settings.server.name"}}<input type="text" id="srvName" value="{{$srv.SrvName.Value}}"></label>
+              <label>{{t "settings.server.password"}}<input type="text" id="srvPassword" value="{{$srv.SrvPassword.Value}}"></label>
+              <label>{{t "settings.server.maxPlayers"}}<input type="number" id="srvMaxPlayers" min="1" value="{{$srv.SrvMaxPlayers.Value}}"></label>
+              <label>{{t "settings.server.description"}}<input type="text" id="srvDescription" value="{{$srv.SrvDescription.Value}}"></label>
+            </form>
+
+            <fieldset class="player-group">
+              <legend>{{t "settings.server.network.legend"}}</legend>
+              <div class="field-grid field-grid-param">
+                <label title="{{t "settings.server.desc.reservePlayfields"}}" data-len="{{len "Srv_ReservePlayfields"}}">Srv_ReservePlayfields{{$val := $srv.SrvReservePlayfields.Value}}{{if not $srv.SrvReservePlayfields.Set}}{{$val = "1"}}{{end}}<input type="number" id="srvReservePlayfields" min="0" max="10" value="{{$val}}"></label>
+                <label title="{{t "settings.server.desc.public"}}" data-len="{{len "Srv_Public"}}">Srv_Public{{$val := $srv.SrvPublic.Value}}{{if not $srv.SrvPublic.Set}}{{$val = "true"}}{{end}}
+                  <select id="srvPublic">
+                    <option value="true" {{if eq $val "true"}}selected{{end}}>true</option>
+                    <option value="false" {{if eq $val "false"}}selected{{end}}>false</option>
+                  </select>
+                </label>
+                <label title="{{t "settings.server.desc.stopPeriod"}}" data-len="{{len "Srv_StopPeriod"}}">Srv_StopPeriod{{$val := $srv.SrvStopPeriod.Value}}{{if not $srv.SrvStopPeriod.Set}}{{$val = "0"}}{{end}}<input type="number" id="srvStopPeriod" min="0" value="{{$val}}"></label>
+                <label title="{{t "settings.server.desc.enableDLC"}}" data-len="{{len "EnableDLC"}}">EnableDLC{{$val := $srv.EnableDLC.Value}}{{if not $srv.EnableDLC.Set}}{{$val = "false"}}{{end}}
+                  <select id="enableDLC">
+                    <option value="true" {{if eq $val "true"}}selected{{end}}>true</option>
+                    <option value="false" {{if eq $val "false"}}selected{{end}}>false</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="player-group">
+              <legend>{{t "settings.server.timeouts.legend"}}</legend>
+              <div class="field-grid field-grid-param">
+                <label title="{{t "settings.server.desc.heartbeatServer"}}" data-len="{{len "HeartbeatServer"}}">HeartbeatServer{{$val := $srv.HeartbeatServer.Value}}{{if not $srv.HeartbeatServer.Set}}{{$val = "15"}}{{end}}<input type="number" id="heartbeatServer" min="0" value="{{$val}}"></label>
+                <label title="{{t "settings.server.desc.heartbeatClient"}}" data-len="{{len "HeartbeatClient"}}">HeartbeatClient{{$val := $srv.HeartbeatClient.Value}}{{if not $srv.HeartbeatClient.Set}}{{$val = "30"}}{{end}}<input type="number" id="heartbeatClient" min="0" value="{{$val}}"></label>
+                <label title="{{t "settings.server.desc.timeoutBooting"}}" data-len="{{len "TimeoutBootingPfServer"}}">TimeoutBootingPfServer{{$val := $srv.TimeoutBootingPfServer.Value}}{{if not $srv.TimeoutBootingPfServer.Set}}{{$val = "90"}}{{end}}<input type="number" id="timeoutBootingPfServer" min="0" value="{{$val}}"></label>
+                <label title="{{t "settings.server.desc.logFlags"}}" data-len="{{len "LogFlags"}}">LogFlags{{$val := $srv.LogFlags.Value}}{{if not $srv.LogFlags.Set}}{{$val = "0"}}{{end}}<input type="number" id="logFlags" min="0" value="{{$val}}"></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="player-group">
+              <legend>{{t "settings.server.protection.legend"}}</legend>
+              <div class="field-grid field-grid-param">
+                <label title="{{t "settings.server.desc.eac"}}" data-len="{{len "EACActive"}}">EACActive{{$val := $srv.EACActive.Value}}{{if not $srv.EACActive.Set}}{{$val = "true"}}{{end}}
+                  <select id="eacActive">
+                    <option value="true" {{if eq $val "true"}}selected{{end}}>true</option>
+                    <option value="false" {{if eq $val "false"}}selected{{end}}>false</option>
+                  </select>
+                </label>
+                <label title="{{t "settings.server.desc.familySharing"}}" data-len="{{len "DisableSteamFamilySharing"}}">DisableSteamFamilySharing{{$val := $srv.DisableSteamFamilySharing.Value}}{{if not $srv.DisableSteamFamilySharing.Set}}{{$val = "false"}}{{end}}
+                  <select id="disableSteamFamilySharing">
+                    <option value="true" {{if eq $val "true"}}selected{{end}}>true</option>
+                    <option value="false" {{if eq $val "false"}}selected{{end}}>false</option>
+                  </select>
+                </label>
+                <label title="{{t "settings.server.desc.sizeClass"}}" data-len="{{len "MaxAllowedSizeClass"}}">MaxAllowedSizeClass{{$val := $srv.MaxAllowedSizeClass.Value}}{{if not $srv.MaxAllowedSizeClass.Set}}{{$val = "10"}}{{end}}<input type="number" id="maxAllowedSizeClass" min="0" max="50" value="{{$val}}"></label>
+                <label title="{{t "settings.server.desc.blueprints"}}" data-len="{{len "AllowedBlueprints"}}">AllowedBlueprints{{$val := $srv.AllowedBlueprints.Value}}{{if not $srv.AllowedBlueprints.Set}}{{$val = "All"}}{{end}}
+                  <select id="allowedBlueprints">
+                    <option value="All" {{if eq $val "All"}}selected{{end}}>All</option>
+                    <option value="StockOnly" {{if eq $val "StockOnly"}}selected{{end}}>StockOnly</option>
+                    <option value="None" {{if eq $val "None"}}selected{{end}}>None</option>
+                  </select>
+                </label>
+                <label title="{{t "settings.server.desc.kickPing"}}" data-len="{{len "KickPlayerWithPing"}}">KickPlayerWithPing{{$val := $srv.KickPlayerWithPing.Value}}{{if not $srv.KickPlayerWithPing.Set}}{{$val = "9999"}}{{end}}<input type="number" id="kickPlayerWithPing" min="0" value="{{$val}}"></label>
+                <label title="{{t "settings.server.desc.loginParallel"}}" data-len="{{len "PlayerLoginParallelCount"}}">PlayerLoginParallelCount{{$val := $srv.PlayerLoginParallelCount.Value}}{{if not $srv.PlayerLoginParallelCount.Set}}{{$val = "999"}}{{end}}<input type="number" id="playerLoginParallelCount" min="0" value="{{$val}}"></label>
+                <label title="{{t "settings.server.desc.vipNames"}}" data-len="{{len "PlayerLoginVipNames"}}">PlayerLoginVipNames<input type="text" id="playerLoginVipNames" value="{{$srv.PlayerLoginVipNames.Value}}"></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="player-group">
+              <legend>{{t "settings.server.mode.legend"}}</legend>
+              <div class="field-grid field-grid-param">
+                <label title="{{t "settings.server.desc.mode"}}" data-len="{{len "Mode"}}">Mode
+                  <select id="mode">
+                    <option value="Survival" {{if ne $srv.Mode.Value "Creative"}}selected{{end}}>Survival</option>
+                    <option value="Creative" {{if eq $srv.Mode.Value "Creative"}}selected{{end}}>Creative</option>
+                  </select>
+                </label>
+                <label title="{{t "settings.server.desc.gameName"}}" data-len="{{len "GameName"}}">GameName<input type="text" id="gameName" value="{{$srv.GameName.Value}}"></label>
+                <label title="{{t "settings.server.desc.seed"}}" data-len="{{len "Seed"}}">Seed<input type="text" id="seed" value="{{$srv.Seed.Value}}"></label>
+              </div>
+            </fieldset>
+            <button type="button" class="btn-small btn-primary" onclick="saveServerSettings()">{{t "common.save"}}</button>
+            <button type="button" class="btn-small settings-cancel-btn" data-tab="server" style="display:none;margin-left:8px" onclick="cancelSettingsChanges()">{{t "modal.cancel"}}</button>
+
+            {{$sc := .Config.ScenarioCache}}
+            {{$scStatus := .Health.ScenarioCache}}
+            {{$extIP := .Identity.ExternalIP}}
+            <fieldset class="player-group" style="margin-top:16px">
+              <legend>{{t "settings.server.scenarioCache.legend"}}</legend>
+              {{if eq $scStatus.Phase "packaging"}}
+              <p class="field-hint" style="color:var(--warn)">{{t "settings.server.scenarioCache.statusPackaging"}}</p>
+              {{else if eq $scStatus.Phase "uploading"}}
+              <p class="field-hint" style="color:var(--warn)">{{t "settings.server.scenarioCache.statusUploading"}}</p>
+              {{else if eq $scStatus.Phase "verifying"}}
+              <p class="field-hint" style="color:var(--warn)">{{t "settings.server.scenarioCache.statusVerifying"}}</p>
+              {{else if eq $scStatus.Phase "failed"}}
+              <p class="field-hint" style="color:var(--danger)">{{t "settings.server.scenarioCache.statusFailed"}}: {{$scStatus.Message}}</p>
+              {{end}}
+              <div class="task-form">
+                <label>{{t "settings.server.scenarioCache.mode"}}
+                  <select id="scenarioCacheMode" onchange="toggleScenarioCacheModeFields()">
+                    <option value="off" {{if or (eq $sc.Mode "") (eq $sc.Mode "off")}}selected{{end}}>{{t "settings.server.scenarioCache.modeOff"}}</option>
+                    <option value="embedded" {{if eq $sc.Mode "embedded"}}selected{{end}}>{{t "settings.server.scenarioCache.modeEmbedded"}}</option>
+                    <option value="panel" {{if eq $sc.Mode "panel"}}selected{{end}}>{{t "settings.server.scenarioCache.modePanel"}}</option>
+                    <option value="own" {{if eq $sc.Mode "own"}}selected{{end}}>{{t "settings.server.scenarioCache.modeOwn"}}</option>
+                  </select>
+                </label>
+              </div>
+              <div id="scenarioCacheEmbeddedFields" class="task-form" style="{{if ne $sc.Mode "embedded"}}display:none{{end}}">
+                <label title="{{t "settings.server.scenarioCache.embeddedListenAddrHint"}}">{{t "settings.server.scenarioCache.embeddedListenAddr"}}<input type="text" id="scenarioCacheEmbeddedListenAddr" value="{{$sc.EmbeddedListenAddr}}" placeholder=":8899"></label>
+              </div>
+              <div id="scenarioCachePanelFields" class="task-form" style="{{if ne $sc.Mode "panel"}}display:none{{end}}">
+                <label title="{{t "settings.server.scenarioCache.panelListenPortHint"}}">{{t "settings.server.scenarioCache.panelListenPort"}}<input type="number" id="scenarioCachePanelListenPort" min="1" max="65535" value="{{if $sc.PanelListenPort}}{{$sc.PanelListenPort}}{{else}}{{.UIListenPort}}{{end}}"></label>
+              </div>
+              {{$ftpUseKey := and (eq $sc.FTPProtocol "sftp") (ne $sc.FTPKey "")}}
+              <div id="scenarioCacheOwnFields" class="task-form" style="{{if ne $sc.Mode "own"}}display:none{{end}}">
+                <label>{{t "settings.server.scenarioCache.ftpProtocol"}}
+                  <select id="scenarioCacheFtpProtocol" onchange="onScenarioCacheFtpProtocolChange()">
+                    <option value="ftp" {{if ne $sc.FTPProtocol "sftp"}}selected{{end}}>FTP</option>
+                    <option value="sftp" {{if eq $sc.FTPProtocol "sftp"}}selected{{end}}>SFTP</option>
+                  </select>
+                </label>
+                <label>{{t "settings.server.scenarioCache.ftpHost"}}<input type="text" id="scenarioCacheFtpHost" value="{{$sc.FTPHost}}"></label>
+                <label>{{t "settings.server.scenarioCache.ftpPort"}}<input type="number" id="scenarioCacheFtpPort" min="0" value="{{if $sc.FTPPort}}{{$sc.FTPPort}}{{end}}"></label>
+                <label>{{t "settings.server.scenarioCache.ftpUser"}}<input type="text" id="scenarioCacheFtpUser" value="{{$sc.FTPUser}}"></label>
+                <label id="scenarioCacheFtpAuthModeRow" style="{{if ne $sc.FTPProtocol "sftp"}}display:none{{end}}">{{t "settings.backup.ftpAuthMode"}}
+                  <select id="scenarioCacheFtpAuthMode" onchange="onScenarioCacheFtpAuthModeChange()">
+                    <option value="password" {{if not $ftpUseKey}}selected{{end}}>{{t "settings.backup.ftpAuthPassword"}}</option>
+                    <option value="key" {{if $ftpUseKey}}selected{{end}}>{{t "settings.backup.ftpAuthKey"}}</option>
+                  </select>
+                </label>
+                <label id="scenarioCacheFtpPasswordRow" style="{{if $ftpUseKey}}display:none{{end}}">{{t "settings.server.scenarioCache.ftpPassword"}}<input type="text" id="scenarioCacheFtpPassword" value="{{$sc.FTPPassword}}"></label>
+                <label>{{t "settings.server.scenarioCache.ftpPath"}}<input type="text" id="scenarioCacheFtpPath" value="{{$sc.FTPPath}}"></label>
+              </div>
+              <div id="scenarioCacheFtpKeyFields" class="task-form" style="{{if or (ne $sc.Mode "own") (not $ftpUseKey)}}display:none{{end}}">
+                <label id="scenarioCacheFtpKeyRow">{{t "settings.server.scenarioCache.ftpKey"}}<textarea id="scenarioCacheFtpKey" rows="5">{{$sc.FTPKey}}</textarea></label>
+              </div>
+              <div id="scenarioCachePublicUrlFields" class="task-form" style="{{if or (eq $sc.Mode "") (eq $sc.Mode "off")}}display:none{{end}}">
+                <label title="{{t "settings.server.scenarioCache.publicUrlBaseHint"}}">{{t "settings.server.scenarioCache.publicUrlBase"}}<input type="text" class="task-form-wide-text" id="scenarioCachePublicUrlBase" value="{{$sc.PublicURLBase}}" placeholder="http://host:8899" data-ext-ip="{{$extIP}}"></label>
+              </div>
+              <button type="button" class="btn-small btn-primary" onclick="saveScenarioCacheSettings()">{{t "common.save"}}</button>
+              <button type="button" class="btn-small" id="scenarioCacheTestBtn" onclick="testScenarioCacheDestination()" style="{{if ne $sc.Mode "own"}}display:none{{end}}">{{t "settings.server.scenarioCache.test"}}</button>
+            </fieldset>
+          </div>
+
+          <div id="tab-gameplay" class="tab-pane"{{if ne .DefaultTab "gameplay"}} style="display:none"{{end}}>
+            {{range .GameOptionGroups}}
+            <fieldset class="player-group">
+              <legend>{{.Name}}</legend>
+              <div class="field-grid field-grid-param">
+              {{range .Fields}}
+              {{$val := .Value}}
+                <label title="{{.Description}}" data-len="{{len .Name}}">{{.Name}}
+                  {{if eq .Kind "bool"}}
+                  <select class="go-field" data-field="{{.Name}}">
+                    <option value="true" {{if eq $val "true"}}selected{{end}}>true</option>
+                    <option value="false" {{if eq $val "false"}}selected{{end}}>false</option>
+                  </select>
+                  {{else if eq .Kind "enum"}}
+                  <select class="go-field" data-field="{{.Name}}">
+                    {{range .Enum}}<option value="{{.}}" {{if eq . $val}}selected{{end}}>{{.}}</option>{{end}}
+                  </select>
+                  {{else}}
+                  <input type="{{if eq .Kind "int"}}number{{else}}text{{end}}" class="go-field" data-field="{{.Name}}" value="{{$val}}">
+                  {{end}}
+                </label>
+              {{end}}
+              </div>
+            </fieldset>
+            {{end}}
+            <button type="button" class="btn-small btn-primary" onclick="saveGameOptions()">{{t "common.save"}}</button>
+            <button type="button" class="btn-small settings-cancel-btn" data-tab="gameplay" style="display:none;margin-left:8px" onclick="cancelSettingsChanges()">{{t "modal.cancel"}}</button>
+          </div>
+          {{end}}
+
+          {{if or .IsAdmin .Perms.ChatbotBasic}}
+          <div id="tab-chatbot" class="tab-pane"{{if ne .DefaultTab "chatbot"}} style="display:none"{{end}}>
+            <fieldset class="player-group">
+              <legend>{{t "settings.chatbot.legend"}}</legend>
+              <div class="task-form">
+                <label>{{t "settings.chatbot.teleportCooldown"}}<input type="number" id="vehicleTeleportCooldownMinutes" min="0" value="{{$cb.VehicleTeleportCooldownMinutes}}"></label>
+                <label>{{t "settings.chatbot.wipeCooldown"}}<input type="number" id="wipeCooldownHours" min="0" value="{{$cb.WipeCooldownHours}}"></label>
+                <label style="flex-direction:row;align-items:center;gap:4px" title="{{t "settings.chatbot.hardWipeHint"}}"><input type="checkbox" id="hardWipe" {{if $cb.HardWipe}}checked{{end}}> {{t "settings.chatbot.hardWipe"}}</label>
+                <label title="{{t "settings.chatbot.serverSenderNameHint"}}">{{t "settings.chatbot.serverSenderName"}}<input type="text" id="serverSenderName" value="{{$cb.ServerSenderName}}"></label>
+              </div>
+
+              {{if .IsAdmin}}
+              <div class="task-form">
+                <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="notifyPlayerPresence" {{if $cb.NotifyPlayerPresence}}checked{{end}}> {{t "settings.chatbot.notifyPlayerPresence"}}</label>
+              </div>
+              {{end}}
+
+              <div class="task-form">
+                <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="welcomeEnabled" onchange="updateWelcomeFieldsAvailability()" {{if $cb.WelcomeMessage.Enabled}}checked{{end}}> {{t "settings.chatbot.welcomeEnabled"}}</label>
+              </div>
+              <fieldset class="player-group" id="welcome-fields" style="{{if not $cb.WelcomeMessage.Enabled}}display:none{{end}}">
+                <legend>{{t "settings.chatbot.welcomeLegend"}}</legend>
+                <div class="table-scroll">
+                  <table class="data-table wm-table">
+                    <colgroup><col class="col-delay"><col class="col-action"><col class="col-text"><col class="col-priority"><col class="col-delete"></colgroup>
+                    <thead><tr><th>{{t "settings.chatbot.welcomeDelay"}}</th><th>{{t "settings.chatbot.custom.col.action"}}</th><th>{{t "settings.chatbot.custom.col.text"}}</th><th>{{t "settings.chatbot.custom.col.priority"}}</th><th></th></tr></thead>
+                    <tbody id="welcome-messages-body">
+                      {{range $item := $cb.WelcomeMessage.Messages}}
+                      <tr class="wm-row">
+                        <td><input type="number" class="wm-delay" min="0" value="{{$item.DelaySeconds}}"></td>
+                        <td>
+                          <select class="wm-type" onchange="updateWmRowVisibility(this)">
+                            <option value="chat" {{if or (eq $item.ActionType "") (eq $item.ActionType "chat")}}selected{{end}}>{{t "settings.chatbot.custom.type.chat"}}</option>
+                            <option value="banner" {{if eq $item.ActionType "banner"}}selected{{end}}>{{t "settings.chatbot.custom.type.banner"}}</option>
+                          </select>
+                        </td>
+                        <td><input type="text" class="wm-text" value="{{$item.Text}}"></td>
+                        <td>
+                          <select class="wm-priority" style="{{if ne $item.ActionType "banner"}}display:none{{end}}">
+                            <option value="0" {{if eq $item.BannerPriority 0}}selected{{end}}>{{t "composer.priority.alarm"}}</option>
+                            <option value="1" {{if eq $item.BannerPriority 1}}selected{{end}}>{{t "composer.priority.message"}}</option>
+                            <option value="2" {{if eq $item.BannerPriority 2}}selected{{end}}>{{t "composer.priority.info"}}</option>
+                          </select>
+                        </td>
+                        <td><button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "common.delete"}}" onclick="this.closest('tr').remove(); updateAddWelcomeMessageButton(); markTabDirty('chatbot')"></button></td>
+                      </tr>
+                      {{end}}
+                    </tbody>
+                  </table>
+                </div>
+                <button type="button" class="btn-icon nfi nfi-plus" id="add-welcome-message-btn" title="{{t "settings.chatbot.welcomeAddRow"}}" onclick="addWelcomeMessageRow()"></button>
+              </fieldset>
+            </fieldset>
+
+            <fieldset class="player-group">
+              <legend>{{t "settings.chatbot.commandsLegend"}}</legend>
+
+              {{if .IsAdmin}}
+              <div class="dim" style="margin-bottom:4px">{{t "settings.chatbot.adminLegend"}}</div>
+              <div class="table-scroll">
+                <table class="data-table cmd-table">
+                  <colgroup><col class="col-enabled"><col class="col-name"><col class="col-desc"><col class="col-gamedesc"></colgroup>
+                  <thead><tr><th>{{t "settings.chatbot.cmdtable.col.enabled"}}</th><th>{{t "settings.chatbot.cmdtable.col.name"}}</th><th>{{t "settings.chatbot.cmdtable.col.desc"}}</th><th>{{t "settings.chatbot.cmdtable.col.gameDesc"}}</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td><input type="checkbox" id="cmdRestartEnabled" {{if cmdEnabled $cb.CommandsEnabled "restart"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:restart</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.restart"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="restart" value="{{cmdDesc $cb.CommandDescriptions "restart" "Перезапустить сервер"}}"></td>
+                    </tr>
+                    <tr>
+                      <td><input type="checkbox" id="cmdStopEnabled" {{if cmdEnabled $cb.CommandsEnabled "stop"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:stop</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.stop"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="stop" value="{{cmdDesc $cb.CommandDescriptions "stop" "Остановить сервер"}}"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {{end}}
+
+              <div class="dim" style="margin:12px 0 4px">{{t "settings.chatbot.basicLegend"}}</div>
+              <div class="table-scroll">
+                <table class="data-table cmd-table">
+                  <colgroup><col class="col-enabled"><col class="col-name"><col class="col-desc"><col class="col-gamedesc"></colgroup>
+                  <thead><tr><th>{{t "settings.chatbot.cmdtable.col.enabled"}}</th><th>{{t "settings.chatbot.cmdtable.col.name"}}</th><th>{{t "settings.chatbot.cmdtable.col.desc"}}</th><th>{{t "settings.chatbot.cmdtable.col.gameDesc"}}</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td><input type="checkbox" id="cmdHelpEnabled" {{if cmdEnabled $cb.CommandsEnabled "?"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:?</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.help"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="?" value="{{cmdDesc $cb.CommandDescriptions "?" "Список доступных команд"}}"></td>
+                    </tr>
+                    <tr>
+                      <td><input type="checkbox" id="cmdWipeEnabled" {{if cmdEnabled $cb.CommandsEnabled "wipe"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:wipe</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.wipe"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="wipe" value="{{cmdDesc $cb.CommandDescriptions "wipe" "Начать игру заново"}}"></td>
+                    </tr>
+                    <tr>
+                      <td><input type="checkbox" id="cmdGetEnabled" {{if cmdEnabled $cb.CommandsEnabled "get"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:get</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.get"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="get" value="{{cmdDesc $cb.CommandDescriptions "get" "Получить список своих структур"}}"></td>
+                    </tr>
+                    <tr>
+                      <td><input type="checkbox" id="cmdShipEnabled" {{if cmdEnabled $cb.CommandsEnabled "ship"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:ship:id</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.ship"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="ship" value="{{cmdDesc $cb.CommandDescriptions "ship" "Переместить судно к себе"}}"></td>
+                    </tr>
+                    <tr>
+                      <td><input type="checkbox" id="cmdDestroyEnabled" {{if cmdEnabled $cb.CommandsEnabled "destroy"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:destroy:id</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.destroy"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="destroy" value="{{cmdDesc $cb.CommandDescriptions "destroy" "Уничтожить свою структуру"}}"></td>
+                    </tr>
+                    <tr>
+                      <td><input type="checkbox" id="cmdTimeEnabled" {{if cmdEnabled $cb.CommandsEnabled "time"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:time</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.time"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="time" value="{{cmdDesc $cb.CommandDescriptions "time" "Время на сервере"}}"></td>
+                    </tr>
+                    <tr>
+                      <td><input type="checkbox" id="cmdSurvivalEnabled" onchange="updateSurvivalGroupAvailability()" {{if cmdEnabled $cb.CommandsEnabled "survival"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:survival</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.survival"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="survival" value="{{cmdDesc $cb.CommandDescriptions "survival" "Получить стартовый набор"}}"></td>
+                    </tr>
+                    <tr>
+                      <td><input type="checkbox" id="cmdRulesEnabled" onchange="updateRulesFieldAvailability()" {{if cmdEnabled $cb.CommandsEnabled "rules"}}checked{{end}}></td>
+                      <td class="cmd-name">cb:rules</td>
+                      <td class="cmd-desc">{{t "settings.chatbot.cmd.rules"}}</td>
+                      <td><input type="text" class="cmd-game-desc" data-cmd="rules" value="{{cmdDesc $cb.CommandDescriptions "rules" "Правила сервера"}}"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="task-form" id="rules-text-fieldset" style="{{if not (cmdEnabled $cb.CommandsEnabled "rules")}}display:none{{end}}">
+                <label style="flex:1 1 100%">{{t "settings.chatbot.rulesTextLabel"}}<textarea id="rulesText" class="task-form-wide-text" rows="8">{{if $cb.RulesText}}{{$cb.RulesText}}{{else}}{{rulesDefaultText}}{{end}}</textarea></label>
+              </div>
+
+              <div class="dim" style="margin:12px 0 4px">{{t "settings.chatbot.customLegend"}}</div>
+              <div class="table-scroll">
+                <table class="data-table cc-table">
+                  <colgroup><col class="col-enabled"><col class="col-name"><col class="col-gamedesc"><col class="col-cooldown"><col class="col-script"><col class="col-action"><col class="col-text"><col class="col-priority"><col class="col-delete"></colgroup>
+                  <thead><tr><th>{{t "settings.chatbot.custom.col.enabled"}}</th><th>{{t "settings.chatbot.custom.col.name"}}</th><th>{{t "settings.chatbot.cmdtable.col.gameDesc"}}</th><th>{{t "settings.chatbot.custom.col.cooldown"}}</th><th>{{t "settings.chatbot.custom.col.script"}}</th><th>{{t "settings.chatbot.custom.col.action"}}</th><th>{{t "settings.chatbot.custom.col.text"}}</th><th>{{t "settings.chatbot.custom.col.priority"}}</th><th></th></tr></thead>
+                  <tbody id="custom-commands-body">
+                    {{range $item := $cb.CustomCommands}}
+                    <tr class="cc-row">
+                      <td><input type="checkbox" class="cc-enabled" {{if $item.Enabled}}checked{{end}} {{if not $.IsAdmin}}disabled{{end}}></td>
+                      <td><input type="text" class="cc-name" value="{{$item.Name}}" {{if not $.IsAdmin}}disabled{{end}}></td>
+                      <td><input type="text" class="cc-game-desc" value="{{$item.GameDescription}}" {{if not $.IsAdmin}}disabled{{end}}></td>
+                      <td><input type="number" class="cc-cooldown" min="0" value="{{$item.CooldownMinutes}}" {{if not $.IsAdmin}}disabled{{end}}></td>
+                      <td>
+                        <select class="cc-script" onchange="updateCcScriptVisibility(this)" {{if not $.IsAdmin}}disabled{{end}}>
+                          <option value="">{{t "settings.chatbot.custom.script.none"}}</option>
+                          {{range $.Scripts}}<option value="{{.}}" {{if eq . $item.ScriptName}}selected{{end}}>{{.}}</option>{{end}}
+                        </select>
+                      </td>
+                      <td>
+                        <select class="cc-type" onchange="updateCcRowVisibility(this)" {{if not $.IsAdmin}}disabled{{end}}>
+                          <option value="dialog" {{if or (eq .ActionType "") (eq .ActionType "dialog")}}selected{{end}}>{{t "settings.chatbot.custom.type.dialog"}}</option>
+                          <option value="chat" {{if eq .ActionType "chat"}}selected{{end}}>{{t "settings.chatbot.custom.type.chat"}}</option>
+                          <option value="banner" {{if eq .ActionType "banner"}}selected{{end}}>{{t "settings.chatbot.custom.type.banner"}}</option>
+                        </select>
+                      </td>
+                      <td><input type="text" class="cc-text" value="{{.Text}}" {{if or .ScriptName (not $.IsAdmin)}}disabled{{end}}></td>
+                      <td>
+                        <select class="cc-priority" style="{{if ne .ActionType "banner"}}display:none{{end}}" {{if not $.IsAdmin}}disabled{{end}}>
+                          <option value="0" {{if eq .BannerPriority 0}}selected{{end}}>{{t "composer.priority.alarm"}}</option>
+                          <option value="1" {{if eq .BannerPriority 1}}selected{{end}}>{{t "composer.priority.message"}}</option>
+                          <option value="2" {{if eq .BannerPriority 2}}selected{{end}}>{{t "composer.priority.info"}}</option>
+                        </select>
+                      </td>
+                      <td>{{if $.IsAdmin}}<button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "common.delete"}}" onclick="this.closest('tr').remove(); markTabDirty('chatbot')"></button>{{end}}</td>
+                    </tr>
+                    {{end}}
+                  </tbody>
+                </table>
+              </div>
+              {{if $.IsAdmin}}
+              <button type="button" class="btn-icon nfi nfi-plus" title="{{t "settings.chatbot.custom.addRow"}}" onclick="addCustomCommandRow()"></button>
+              {{end}}
+            </fieldset>
+
+            <fieldset class="player-group" id="survival-kit-fieldset" style="{{if not (cmdEnabled $cb.CommandsEnabled "survival")}}display:none{{end}}">
+              <legend>{{t "settings.chatbot.survivalLegend"}}</legend>
+              <div class="task-form">
+                <label>{{t "settings.chatbot.credits"}}<input type="number" id="survivalCredits" min="0" value="{{$cb.SurvivalCredits}}"></label>
+              </div>
+              <div style="margin-top:8px">
+                <div class="dim" style="margin-bottom:4px">{{t "settings.chatbot.itemsMax"}}</div>
+                <div id="survival-items-list"></div>
+                <button type="button" class="btn-icon nfi nfi-plus" id="add-survival-item-btn" title="{{t "settings.chatbot.addItem"}}" onclick="addSurvivalItemRow()"></button>
+              </div>
+            </fieldset>
+
+            <button type="button" class="btn-small btn-primary" onclick="saveChatbotSettings()">{{t "common.save"}}</button>
+            <button type="button" class="btn-small settings-cancel-btn" data-tab="chatbot" style="display:none;margin-left:8px" onclick="cancelSettingsChanges()">{{t "modal.cancel"}}</button>
+          </div>
+          {{end}}
+
+          {{if or .IsAdmin .Perms.PanelBasic}}
+          <div id="tab-panel" class="tab-pane"{{if ne .DefaultTab "panel"}} style="display:none"{{end}}>
+            {{$wd := .Config.Watchdog}}
+            {{if .IsAdmin}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.watchdogLegend"}}</legend>
+              <div class="task-form">
+                <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="autoRestartOnHang" {{if $wd.AutoRestartOnHang}}checked{{end}}> {{t "settings.panel.autoRestart"}}</label>
+                <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="logHangs" {{if logHangsEnabled $wd.LogHangs}}checked{{end}}> {{t "settings.panel.logHangs"}}</label>
+              </div>
+            </fieldset>
+
+            <div class="player-group-row">
+            {{$bp := .Config.Backpack}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.historyLegend"}}</legend>
+              <div class="task-form">
+                <label>{{t "settings.panel.historyInterval"}}<input type="number" id="minHistoryIntervalMinutes" min="1" value="{{minutesOf $bp.MinHistoryIntervalSeconds}}"></label>
+                <label title="{{t "settings.panel.historyMaxEntriesHint"}}">{{t "settings.panel.historyMaxEntries"}}<input type="number" id="maxHistoryEntries" min="1" value="{{$bp.MaxHistoryEntries}}"></label>
+              </div>
+            </fieldset>
+
+            {{$st := .Config.Structures}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.structuresHistoryLegend"}}</legend>
+              <div class="task-form">
+                <label>{{t "settings.panel.structuresHistoryInterval"}}<input type="number" id="structuresBackupIntervalMinutes" min="1" value="{{$st.BackupIntervalMinutes}}"></label>
+                <label>{{t "settings.panel.structuresHistoryMaxEntries"}}<input type="number" id="structuresMaxBackupEntries" min="1" value="{{$st.MaxBackupEntries}}"></label>
+                <label style="flex-direction:row;align-items:center;gap:4px" title="{{t "settings.panel.structuresRequireOwnerNearbyHint"}}"><input type="checkbox" id="structuresRequireOwnerNearby" {{if $st.RequireOwnerNearby}}checked{{end}}> {{t "settings.panel.structuresRequireOwnerNearby"}}</label>
+              </div>
+            </fieldset>
+            </div>
+
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.inventoryConflictLegend"}}</legend>
+              <div class="task-form">
+                <label style="flex-direction:row;align-items:center;gap:4px" title="{{t "settings.panel.forceOverwriteInventoryHint"}}"><input type="checkbox" id="forceOverwriteInventory" {{if $bp.ForceOverwriteInventory}}checked{{end}}> {{t "settings.panel.forceOverwriteInventory"}}</label>
+              </div>
+            </fieldset>
+
+            {{$maint := .Config.Maintenance}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.maintenanceLegend"}}</legend>
+              <div class="task-form">
+                <label style="flex-direction:row;align-items:center;gap:4px" title="{{t "settings.panel.cleanOldBuildLogsHint"}}"><input type="checkbox" id="cleanOldBuildLogs" {{if $maint.CleanOldBuildLogs}}checked{{end}}> {{t "settings.panel.cleanOldBuildLogs"}}</label>
+                <label style="flex-direction:row;align-items:center;gap:4px" title="{{t "settings.panel.checkUpdatesPeriodicallyHint"}}"><input type="checkbox" id="checkUpdatesPeriodically" {{if $maint.CheckUpdatesPeriodically}}checked{{end}}> {{t "settings.panel.checkUpdatesPeriodically"}}</label>
+              </div>
+              <div class="task-form">
+                <label title="{{t "settings.panel.manualActionWarnMinutesHint"}}"><span>{{t "settings.panel.manualActionWarnMinutes"}}</span><input type="number" id="manualActionWarnMinutes" min="0" value="{{$maint.ManualActionWarnMinutes}}" placeholder="{{t "scheduler.form.warnMinutesPlaceholder"}}"></label>
+              </div>
+
+              <div class="checkbox-list">
+                <label><input type="checkbox" name="wipe-store" value="backpack"> {{t "maintenance.localDbBackpack"}}</label>
+                <label><input type="checkbox" name="wipe-store" value="chat"> {{t "maintenance.localDbChat"}}</label>
+                <label><input type="checkbox" name="wipe-store" value="history"> {{t "maintenance.localDbHistory"}}</label>
+                <label><input type="checkbox" name="wipe-store" value="presence"> {{t "maintenance.localDbPresence"}}</label>
+                <label><input type="checkbox" name="wipe-store" value="playerstats"> {{t "maintenance.localDbPlayerstats"}}</label>
+                <label><input type="checkbox" name="wipe-store" value="playerqueue"> {{t "maintenance.localDbPlayerqueue"}}</label>
+                <label><input type="checkbox" name="wipe-store" value="structurequeue"> {{t "maintenance.localDbStructurequeue"}}</label>
+                <label><input type="checkbox" name="wipe-store" value="notify"> {{t "maintenance.localDbNotify"}}</label>
+              </div>
+              <button type="button" class="btn-small btn-danger" onclick="openWipeLocalDBConfirm()"{{if .Health.Active}} disabled title="{{t "maintenance.localDbBlockedHint"}}"{{end}}>{{t "maintenance.localDbButton"}}</button>
+            </fieldset>
+
+            {{$audit := .Config.Audit}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.auditLegend"}}</legend>
+              <div class="checkbox-list">
+                <label title="{{t "settings.panel.auditUnauthorizedApiRequestsHint"}}"><input type="checkbox" id="auditUnauthorizedApiRequests" {{if $audit.UnauthorizedAPIRequests}}checked{{end}}> {{t "settings.panel.auditUnauthorizedApiRequests"}}</label>
+                <label title="{{t "settings.panel.auditInventoryFuelAnomalyHint"}}"><input type="checkbox" id="auditInventoryFuelAnomaly" {{if $audit.InventoryFuelAnomaly}}checked{{end}}> {{t "settings.panel.auditInventoryFuelAnomaly"}}</label>
+                <label title="{{t "settings.panel.auditWipeLeftoverHint"}}"><input type="checkbox" id="auditWipeLeftover" {{if $audit.WipeLeftover}}checked{{end}}> {{t "settings.panel.auditWipeLeftover"}}</label>
+                <label title="{{t "settings.panel.auditPositionJumpHint"}}"><input type="checkbox" id="auditPositionJump" {{if $audit.PositionJump}}checked{{end}}> {{t "settings.panel.auditPositionJump"}}</label>
+                <label title="{{t "settings.panel.auditPermissionFactionChangeHint"}}"><input type="checkbox" id="auditPermissionFactionChange" {{if $audit.PermissionFactionChange}}checked{{end}}> {{t "settings.panel.auditPermissionFactionChange"}}</label>
+                <label title="{{t "settings.panel.auditLoginTrackingHint"}}"><input type="checkbox" id="auditLoginTracking" {{if $audit.LoginTracking}}checked{{end}}> {{t "settings.panel.auditLoginTracking"}}</label>
+              </div>
+            </fieldset>
+            {{end}}
+
+            {{$enabledMounts := .Config.Monitoring.EnabledMounts}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.filesystemsLegend"}}</legend>
+              <div class="checkbox-list">
+                {{range .Mounts}}
+                <label><input type="checkbox" class="mount-checkbox" value="{{.Mountpoint}}" {{if contains $enabledMounts .Mountpoint}}checked{{end}}> {{.Mountpoint}} <span class="cmd-desc">({{.FSType}})</span></label>
+                {{end}}
+              </div>
+            </fieldset>
+
+            {{$mon := .Config.Monitoring}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.thresholdsLegend"}}</legend>
+              <div class="task-form">
+                <label>{{t "settings.panel.warningPercent"}}<input type="number" id="warningPercent" min="1" max="100" value="{{$mon.WarningPercent}}"></label>
+                <label>{{t "settings.panel.criticalPercent"}}<input type="number" id="criticalPercent" min="1" max="100" value="{{$mon.CriticalPercent}}"></label>
+              </div>
+            </fieldset>
+
+            {{if .IsAdmin}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.monitoringLegend"}}</legend>
+              <div class="task-form">
+                <label title="{{t "settings.panel.monitoringRetentionDaysHint"}}">{{t "settings.panel.monitoringRetentionDays"}}<input type="number" id="monitoringRetentionDays" min="1" max="365" value="{{if $mon.HistoryRetentionDays}}{{$mon.HistoryRetentionDays}}{{else}}7{{end}}"></label>
+              </div>
+            </fieldset>
+            {{end}}
+
+            {{$irc := .ItemRenderConfig}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.itemRenderLegend"}}</legend>
+              <div class="checkbox-list">
+                <label><input type="checkbox" id="item-render-localized-names" {{if $irc.LocalizedNames}}checked{{end}}> {{t "settings.panel.itemRenderLocalizedNames"}}</label>
+                <label><input type="checkbox" id="item-render-show-descriptions" {{if $irc.ShowDescriptions}}checked{{end}}> {{t "settings.panel.itemRenderShowDescriptions"}}</label>
+                <label><input type="checkbox" id="item-render-tags" {{if $irc.RenderTags}}checked{{end}}> {{t "settings.panel.itemRenderTags"}}</label>
+                <label><input type="checkbox" id="item-render-dark-bg" {{if $irc.DarkBackground}}checked{{end}}> {{t "settings.panel.itemRenderDarkBg"}}</label>
+              </div>
+            </fieldset>
+
+            <div class="chat-colors-row">
+              <fieldset class="player-group chat-colors-group">
+                <legend>{{t "settings.panel.chatColorsLegend"}}</legend>
+                <div class="chat-colors-theme">
+                  <div class="chat-colors-theme-head">
+                    <span>{{t "settings.panel.chatColorsLight"}}</span>
+                  </div>
+                  <div id="chatColorRows-Light"></div>
+                  <div class="chat-colors-subhead">{{t "settings.panel.chatColorsBannerSubhead"}}</div>
+                  <div id="chatColorBannerRows-Light"></div>
+                </div>
+                <div class="chat-colors-theme">
+                  <div class="chat-colors-theme-head">
+                    <span>{{t "settings.panel.chatColorsDark"}}</span>
+                  </div>
+                  <div id="chatColorRows-Dark"></div>
+                  <div class="chat-colors-subhead">{{t "settings.panel.chatColorsBannerSubhead"}}</div>
+                  <div id="chatColorBannerRows-Dark"></div>
+                </div>
+              </fieldset>
+              <fieldset class="player-group chat-colors-group">
+                <legend>{{t "settings.panel.chatColorsSendersLegend"}}</legend>
+                <div class="chat-colors-theme">
+                  <div class="chat-colors-theme-head">
+                    <span>{{t "settings.panel.chatColorsLight"}}</span>
+                  </div>
+                  <div id="chatColorSenderRows-Light"></div>
+                </div>
+                <div class="chat-colors-theme">
+                  <div class="chat-colors-theme-head">
+                    <span>{{t "settings.panel.chatColorsDark"}}</span>
+                  </div>
+                  <div id="chatColorSenderRows-Dark"></div>
+                </div>
+              </fieldset>
+            </div>
+
+            {{$pc := .PlayerColumns}}
+            <fieldset class="player-group">
+              <legend>{{t "settings.panel.playerColumnsLegend"}}</legend>
+              <div class="checkbox-list">
+                <label><input type="checkbox" id="colFaction" {{if $pc.Faction}}checked{{end}}> {{t "players.col.faction"}}</label>
+                <label><input type="checkbox" id="colCoords" {{if $pc.Coords}}checked{{end}}> {{t "settings.panel.colCoords"}}</label>
+                <label><input type="checkbox" id="colKills" {{if $pc.Kills}}checked{{end}}> {{t "players.col.kills"}}</label>
+                <label><input type="checkbox" id="colDied" {{if $pc.Died}}checked{{end}}> {{t "players.col.died"}}</label>
+                <label><input type="checkbox" id="colCredits" {{if $pc.Credits}}checked{{end}}> {{t "players.col.credits"}}</label>
+                <label><input type="checkbox" id="colExp" {{if $pc.Exp}}checked{{end}}> {{t "players.col.exp"}}</label>
+                <label><input type="checkbox" id="colPing" {{if $pc.Ping}}checked{{end}}> {{t "players.col.ping"}}</label>
+                <label><input type="checkbox" id="colLastOnline" {{if $pc.LastOnline}}checked{{end}}> {{t "players.col.lastOnline"}}</label>
+                <label><input type="checkbox" id="colOnlineHours" {{if $pc.OnlineHours}}checked{{end}}> {{t "players.col.onlineHours"}}</label>
+                <label><input type="checkbox" id="colQuickLinks" {{if $pc.QuickLinks}}checked{{end}}> {{t "settings.panel.colQuickLinks"}}</label>
+              </div>
+            </fieldset>
+
+            {{if .IsAdmin}}
+            <div class="player-group-row">
+            <fieldset class="player-group" id="admin-players-fieldset">
+              <legend>{{t "settings.panel.adminPlayersLegend"}}</legend>
+              <form hx-post="/action/admin-players/add" hx-target="#admin-players-inner" hx-swap="innerHTML" class="task-form">
+                <label>{{t "settings.panel.adminPlayersLabel"}}<input type="text" name="steamId" list="known-players-datalist" placeholder="{{t "settings.panel.adminPlayersPlaceholder"}}"></label>
+                <datalist id="known-players-datalist">
+                  {{range .AllPlayers}}<option value="{{.SteamId}}">{{.Name}}</option>{{end}}
+                </datalist>
+                <button type="submit" class="btn-small">{{t "common.add"}}</button>
+              </form>
+              <div id="admin-players-inner">{{template "admin_players_fragment" .AdminIdentities}}</div>
+            </fieldset>
+
+            <fieldset class="player-group" id="moderator-players-fieldset">
+              <legend>{{t "settings.panel.moderatorPlayersLegend"}}</legend>
+              <form hx-post="/action/moderator-players/add" hx-target="#moderator-players-inner" hx-swap="innerHTML" class="task-form">
+                <label>{{t "settings.panel.moderatorPlayersLabel"}}<input type="text" name="steamId" list="known-players-datalist" placeholder="{{t "settings.panel.adminPlayersPlaceholder"}}"></label>
+                <button type="submit" class="btn-small">{{t "common.add"}}</button>
+              </form>
+              <div id="moderator-players-inner">{{template "moderator_players_fragment" .ModeratorIdentities}}</div>
+            </fieldset>
+            </div>
+            {{end}}
+
+            <button type="button" class="btn-small btn-primary" onclick="savePanelSettings()">{{t "common.save"}}</button>
+            <button type="button" class="btn-small settings-cancel-btn" data-tab="panel" style="display:none;margin-left:8px" onclick="cancelSettingsChanges()">{{t "modal.cancel"}}</button>
+          </div>
+          {{end}}
+
+          {{if .IsAdmin}}
+          {{$backup := .Config.Backup}}
+          {{$d0 := index $backup.Destinations 0}}
+          {{$d1 := index $backup.Destinations 1}}
+          <div id="tab-backup" class="tab-pane"{{if ne .DefaultTab "backup"}} style="display:none"{{end}}>
+            <div id="backup-destinations"></div>
+
+            {{$exclude := $backup.Exclude}}
+            <fieldset class="player-group" style="margin-top:12px">
+              <legend>{{t "settings.backup.archiveContentsLegend"}}</legend>
+              <div class="task-form">
+                <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="includeElb" {{if not $exclude.Elb}}checked{{end}}> {{t "settings.backup.includeElb"}}</label>
+                <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="includeWine" {{if not $exclude.Wine}}checked{{end}}> {{t "settings.backup.includeWine"}}</label>
+              </div>
+              <fieldset class="player-group">
+                <legend>{{t "settings.backup.savesLegend"}}</legend>
+                <div class="checkbox-list">
+                  {{range .Saves}}
+                  <label><input type="checkbox" class="include-saves-cb" value="{{.}}" {{if not (contains $exclude.Saves .)}}checked{{end}}> {{.}}</label>
+                  {{end}}
+                </div>
+              </fieldset>
+              {{if .Mods}}
+              <fieldset class="player-group">
+                <legend>{{t "settings.backup.modsLegend"}}</legend>
+                <div class="checkbox-list">
+                  {{range .Mods}}
+                  <label><input type="checkbox" class="include-mods-cb" value="{{.Name}}" {{if not (contains $exclude.Mods .Name)}}checked{{end}}> {{.Name}}</label>
+                  {{end}}
+                </div>
+              </fieldset>
+              {{end}}
+              <fieldset class="player-group">
+                <legend>{{t "settings.backup.contentLegend"}}</legend>
+                <div class="task-form">
+                  <label style="flex-direction:row;align-items:center;gap:4px"><input type="radio" name="contentMode" id="contentModeContent" value="content" {{if ne $exclude.ContentMode "scenario"}}checked{{end}} onchange="updateContentModeUI()"> {{t "settings.backup.contentModeContent"}}</label>
+                  <label style="flex-direction:row;align-items:center;gap:4px"><input type="radio" name="contentMode" id="contentModeScenario" value="scenario" {{if eq $exclude.ContentMode "scenario"}}checked{{end}} onchange="updateContentModeUI()"> {{t "settings.backup.contentModeScenario"}}</label>
+                </div>
+                {{if .Scenarios}}
+                <div class="checkbox-list" id="scenariosCheckboxList" style="{{if ne $exclude.ContentMode "scenario"}}display:none{{end}}">
+                  {{range .Scenarios}}
+                  <label><input type="checkbox" class="include-scenarios-cb" value="{{.}}" {{if not (contains $exclude.Scenarios .)}}checked{{end}}> {{.}}</label>
+                  {{end}}
+                </div>
+                {{end}}
+              </fieldset>
+            </fieldset>
+            <button type="button" class="btn-small btn-primary" onclick="saveRetention()">{{t "common.save"}}</button>
+            <button type="button" class="btn-small settings-cancel-btn" data-tab="backup" style="display:none;margin-left:8px" onclick="cancelSettingsChanges()">{{t "modal.cancel"}}</button>
+          </div>
+          {{end}}
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="modal-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box wide" id="modal-box">
+      <h3 id="modal-title"></h3>
+      <div id="modal-body"></div>
+      <div id="modal-error" class="modal-error" style="display:none"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-small" onclick="closeModal()">{{t "modal.cancel"}}</button>
+        <button type="button" class="btn-small btn-primary" id="modal-confirm-btn">{{t "modal.confirm"}}</button>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script>
+    var I18N = {
+      ccDialog: {{t "settings.chatbot.custom.type.dialog"}},
+      ccChat: {{t "settings.chatbot.custom.type.chat"}},
+      ccBanner: {{t "settings.chatbot.custom.type.banner"}},
+      ccScriptNone: {{t "settings.chatbot.custom.script.none"}},
+      delete: {{t "common.delete"}},
+      itemSearchPlaceholder: {{t "settings.chatbot.itemSearchPlaceholder"}},
+      noResults: {{t "player.slot.noResults"}},
+      priorityAlarm: {{t "composer.priority.alarm"}},
+      priorityMessage: {{t "composer.priority.message"}},
+      priorityInfo: {{t "composer.priority.info"}},
+    };
+
+    {{$cc := .ChatColors}}
+    var CHAT_COLOR_CHANNELS = [
+      { key: 'global', label: {{t "channel.global"}} },
+      { key: 'faction', label: {{t "channel.faction"}} },
+      { key: 'alliance', label: {{t "channel.alliance"}} },
+      { key: 'server', label: {{t "channel.server"}} },
+      { key: 'singleplayer', label: {{t "channel.singleplayer"}} },
+    ];
+    var chatColorsCurrent = {
+      Light: { global: {{$cc.Light.Global}}, faction: {{$cc.Light.Faction}}, alliance: {{$cc.Light.Alliance}}, server: {{$cc.Light.Server}}, singleplayer: {{$cc.Light.Singleplayer}} },
+      Dark: { global: {{$cc.Dark.Global}}, faction: {{$cc.Dark.Faction}}, alliance: {{$cc.Dark.Alliance}}, server: {{$cc.Dark.Server}}, singleplayer: {{$cc.Dark.Singleplayer}} },
+    };
+    var CHAT_SENDER_TYPES = [
+      { key: 'server', label: {{t "settings.panel.chatColorsSenderServer"}} },
+      { key: 'admin', label: {{t "settings.panel.chatColorsSenderAdmin"}} },
+      { key: 'vip', label: {{t "settings.panel.chatColorsSenderVip"}} },
+    ];
+    var chatSenderColorsCurrent = {
+      Light: { server: {{$cc.LightSenders.Server}}, admin: {{$cc.LightSenders.Admin}}, vip: {{$cc.LightSenders.VIP}} },
+      Dark: { server: {{$cc.DarkSenders.Server}}, admin: {{$cc.DarkSenders.Admin}}, vip: {{$cc.DarkSenders.VIP}} },
+    };
+    var CHAT_BANNER_TYPES = [
+      { key: 'alarm', label: {{t "composer.priority.alarm"}} },
+      { key: 'message', label: {{t "composer.priority.message"}} },
+      { key: 'info', label: {{t "composer.priority.info"}} },
+    ];
+    var chatBannerColorsCurrent = {
+      Light: { alarm: {{$cc.LightBanner.Alarm}}, message: {{$cc.LightBanner.Message}}, info: {{$cc.LightBanner.Info}} },
+      Dark: { alarm: {{$cc.DarkBanner.Alarm}}, message: {{$cc.DarkBanner.Message}}, info: {{$cc.DarkBanner.Info}} },
+    };
+    function hexToRgb(hex) {
+      var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+      if (!m) return { r: 128, g: 128, b: 128 };
+      return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
+    }
+    function rgbToHex(r, g, b) {
+      function h(n) { var s = n.toString(16); return s.length === 1 ? '0' + s : s; }
+      return '#' + h(r) + h(g) + h(b);
+    }
+    function capitalizeChatColorKey(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+    function normalizeHex(v) {
+      v = (v || '').trim();
+      if (v.charAt(0) !== '#') v = '#' + v;
+      return /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : null;
+    }
+    function buildChatColorRow(theme, channel) {
+      var row = document.createElement('div');
+      row.className = 'chat-color-row';
+
+      var label = document.createElement('span');
+      label.className = 'chat-color-label';
+      label.textContent = channel.label;
+      row.appendChild(label);
+
+      var swatch = document.createElement('span');
+      swatch.className = 'chat-color-swatch';
+      row.appendChild(swatch);
+
+      var hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.id = 'chatColor' + theme + capitalizeChatColorKey(channel.key);
+      row.appendChild(hiddenInput);
+
+      var rgb = hexToRgb(chatColorsCurrent[theme][channel.key]);
+      var sliders = {};
+      ['r', 'g', 'b'].forEach(function (comp) {
+        var sliderLabel = document.createElement('label');
+        sliderLabel.className = 'chat-color-slider-label';
+        sliderLabel.appendChild(document.createTextNode(comp.toUpperCase()));
+        var slider = document.createElement('input');
+        slider.type = 'range'; slider.min = '0'; slider.max = '255'; slider.value = String(rgb[comp]);
+        slider.className = 'chat-color-slider';
+        sliderLabel.appendChild(slider);
+        row.appendChild(sliderLabel);
+        sliders[comp] = slider;
+      });
+
+      var hexInput = document.createElement('input');
+      hexInput.type = 'text';
+      hexInput.className = 'chat-color-hex';
+      hexInput.maxLength = 7;
+      hexInput.spellcheck = false;
+      hexInput.autocomplete = 'off';
+      row.appendChild(hexInput);
+
+      function updateFromSliders() {
+        var hex = rgbToHex(parseInt(sliders.r.value, 10), parseInt(sliders.g.value, 10), parseInt(sliders.b.value, 10));
+        hiddenInput.value = hex;
+        swatch.style.background = hex;
+        hexInput.value = hex;
+      }
+      function updateFromHexInput() {
+        var hex = normalizeHex(hexInput.value);
+        if (!hex) return; 
+        var parsed = hexToRgb(hex);
+        sliders.r.value = parsed.r; sliders.g.value = parsed.g; sliders.b.value = parsed.b;
+        hiddenInput.value = hex;
+        swatch.style.background = hex;
+      }
+      sliders.r.addEventListener('input', updateFromSliders);
+      sliders.g.addEventListener('input', updateFromSliders);
+      sliders.b.addEventListener('input', updateFromSliders);
+      hexInput.addEventListener('input', updateFromHexInput);
+      hexInput.addEventListener('blur', function () { hexInput.value = hiddenInput.value; });
+      updateFromSliders();
+      return row;
+    }
+    function renderChatColorTheme(theme) {
+      var container = document.getElementById('chatColorRows-' + theme);
+      if (!container) return; 
+      container.innerHTML = '';
+      CHAT_COLOR_CHANNELS.forEach(function (ch) { container.appendChild(buildChatColorRow(theme, ch)); });
+    }
+    function buildChatBannerRow(theme, bannerType) {
+      var row = document.createElement('div');
+      row.className = 'chat-color-row';
+
+      var label = document.createElement('span');
+      label.className = 'chat-color-label';
+      label.textContent = bannerType.label;
+      row.appendChild(label);
+
+      var swatch = document.createElement('span');
+      swatch.className = 'chat-color-swatch';
+      row.appendChild(swatch);
+
+      var hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.id = 'chatColorBanner' + theme + capitalizeChatColorKey(bannerType.key);
+      row.appendChild(hiddenInput);
+
+      var rgb = hexToRgb(chatBannerColorsCurrent[theme][bannerType.key]);
+      var sliders = {};
+      ['r', 'g', 'b'].forEach(function (comp) {
+        var sliderLabel = document.createElement('label');
+        sliderLabel.className = 'chat-color-slider-label';
+        sliderLabel.appendChild(document.createTextNode(comp.toUpperCase()));
+        var slider = document.createElement('input');
+        slider.type = 'range'; slider.min = '0'; slider.max = '255'; slider.value = String(rgb[comp]);
+        slider.className = 'chat-color-slider';
+        sliderLabel.appendChild(slider);
+        row.appendChild(sliderLabel);
+        sliders[comp] = slider;
+      });
+
+      var hexInput = document.createElement('input');
+      hexInput.type = 'text';
+      hexInput.className = 'chat-color-hex';
+      hexInput.maxLength = 7;
+      hexInput.spellcheck = false;
+      hexInput.autocomplete = 'off';
+      row.appendChild(hexInput);
+
+      function updateFromSliders() {
+        var hex = rgbToHex(parseInt(sliders.r.value, 10), parseInt(sliders.g.value, 10), parseInt(sliders.b.value, 10));
+        hiddenInput.value = hex;
+        swatch.style.background = hex;
+        hexInput.value = hex;
+      }
+      function updateFromHexInput() {
+        var hex = normalizeHex(hexInput.value);
+        if (!hex) return;
+        var parsed = hexToRgb(hex);
+        sliders.r.value = parsed.r; sliders.g.value = parsed.g; sliders.b.value = parsed.b;
+        hiddenInput.value = hex;
+        swatch.style.background = hex;
+      }
+      sliders.r.addEventListener('input', updateFromSliders);
+      sliders.g.addEventListener('input', updateFromSliders);
+      sliders.b.addEventListener('input', updateFromSliders);
+      hexInput.addEventListener('input', updateFromHexInput);
+      hexInput.addEventListener('blur', function () { hexInput.value = hiddenInput.value; });
+      updateFromSliders();
+      return row;
+    }
+    function renderChatBannerTheme(theme) {
+      var container = document.getElementById('chatColorBannerRows-' + theme);
+      if (!container) return;
+      container.innerHTML = '';
+      CHAT_BANNER_TYPES.forEach(function (t) { container.appendChild(buildChatBannerRow(theme, t)); });
+    }
+    function buildChatSenderRow(theme, sender) {
+      var row = document.createElement('div');
+      row.className = 'chat-color-row';
+
+      var current = chatSenderColorsCurrent[theme][sender.key];
+
+      var enableLabel = document.createElement('label');
+      enableLabel.className = 'chat-color-enable';
+      var enableCheckbox = document.createElement('input');
+      enableCheckbox.type = 'checkbox';
+      enableCheckbox.checked = !!current;
+      enableLabel.appendChild(enableCheckbox);
+      row.appendChild(enableLabel);
+
+      var label = document.createElement('span');
+      label.className = 'chat-color-label';
+      label.textContent = sender.label;
+      row.appendChild(label);
+
+      var swatch = document.createElement('span');
+      swatch.className = 'chat-color-swatch';
+      row.appendChild(swatch);
+
+      var hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.id = 'chatColorSender' + theme + capitalizeChatColorKey(sender.key);
+      row.appendChild(hiddenInput);
+
+      var rgb = hexToRgb(current || '#ffffff');
+      var sliders = {};
+      ['r', 'g', 'b'].forEach(function (comp) {
+        var sliderLabel = document.createElement('label');
+        sliderLabel.className = 'chat-color-slider-label';
+        sliderLabel.appendChild(document.createTextNode(comp.toUpperCase()));
+        var slider = document.createElement('input');
+        slider.type = 'range'; slider.min = '0'; slider.max = '255'; slider.value = String(rgb[comp]);
+        slider.className = 'chat-color-slider';
+        sliderLabel.appendChild(slider);
+        row.appendChild(sliderLabel);
+        sliders[comp] = slider;
+      });
+
+      var hexInput = document.createElement('input');
+      hexInput.type = 'text';
+      hexInput.className = 'chat-color-hex';
+      hexInput.maxLength = 7;
+      hexInput.spellcheck = false;
+      hexInput.autocomplete = 'off';
+      row.appendChild(hexInput);
+
+      function currentHex() {
+        return rgbToHex(parseInt(sliders.r.value, 10), parseInt(sliders.g.value, 10), parseInt(sliders.b.value, 10));
+      }
+      function applyState() {
+        var hex = currentHex();
+        swatch.style.background = hex;
+        hexInput.value = hex;
+        hiddenInput.value = enableCheckbox.checked ? hex : '';
+        var on = enableCheckbox.checked;
+        sliders.r.disabled = sliders.g.disabled = sliders.b.disabled = !on;
+        hexInput.disabled = !on;
+        row.classList.toggle('chat-color-row-disabled', !on);
+      }
+      function updateFromHexInput() {
+        var hex = normalizeHex(hexInput.value);
+        if (!hex) return;
+        var parsed = hexToRgb(hex);
+        sliders.r.value = parsed.r; sliders.g.value = parsed.g; sliders.b.value = parsed.b;
+        applyState();
+      }
+      enableCheckbox.addEventListener('change', applyState);
+      sliders.r.addEventListener('input', applyState);
+      sliders.g.addEventListener('input', applyState);
+      sliders.b.addEventListener('input', applyState);
+      hexInput.addEventListener('input', updateFromHexInput);
+      hexInput.addEventListener('blur', function () { hexInput.value = currentHex(); });
+      applyState();
+      return row;
+    }
+    function renderChatSenderTheme(theme) {
+      var container = document.getElementById('chatColorSenderRows-' + theme);
+      if (!container) return;
+      container.innerHTML = '';
+      CHAT_SENDER_TYPES.forEach(function (t) { container.appendChild(buildChatSenderRow(theme, t)); });
+    }
+    renderChatColorTheme('Light');
+    renderChatColorTheme('Dark');
+    renderChatBannerTheme('Light');
+    renderChatBannerTheme('Dark');
+    renderChatSenderTheme('Light');
+    renderChatSenderTheme('Dark');
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+
+    function normalizeFieldWidths(container) {
+      var labels = Array.prototype.slice.call(container.querySelectorAll('.field-grid-param label[data-len]'));
+      if (!labels.length) return;
+      var maxLen = 0;
+      labels.forEach(function (l) {
+        var len = parseInt(l.dataset.len, 10) || 0;
+        if (len > maxLen) maxLen = len;
+      });
+      var basis = (maxLen + 5) + 'ch';
+      labels.forEach(function (l) { l.style.flex = '0 0 ' + basis; });
+    }
+
+    if (document.getElementById('tab-server')) normalizeFieldWidths(document.getElementById('tab-server'));
+    if (document.getElementById('scenarioCacheOwnFields')) syncScenarioCacheFtpKeyWidth();
+
+
+    function showTab(name) {
+      document.querySelectorAll('.tab-pane').forEach(function (el) { el.style.display = 'none'; });
+      document.querySelectorAll('.tab-btn').forEach(function (el) { el.classList.remove('active'); });
+      document.getElementById('tab-' + name).style.display = '';
+      document.querySelector('.tab-btn[data-tab="' + name + '"]').classList.add('active');
+      var pane = document.getElementById('tab-gameplay');
+      if (name === 'gameplay' && !pane.dataset.widthsSet) {
+        normalizeFieldWidths(pane);
+        pane.dataset.widthsSet = '1';
+      }
+      if (name === 'server') syncScenarioCacheFtpKeyWidth();
+    }
+
+    var SETTINGS_TABS_WITH_DIRTY = ['server', 'gameplay', 'chatbot', 'panel', 'backup'];
+    function markTabDirty(name) {
+      var btn = document.querySelector('.settings-cancel-btn[data-tab="' + name + '"]');
+      if (btn) btn.style.display = '';
+    }
+    function clearTabDirty(name) {
+      var btn = document.querySelector('.settings-cancel-btn[data-tab="' + name + '"]');
+      if (btn) btn.style.display = 'none';
+    }
+    function cancelSettingsChanges() {
+      var active = document.querySelector('.tab-btn.active');
+      if (active) sessionStorage.setItem('elb_settings_cancel_tab', active.dataset.tab);
+      location.reload();
+    }
+    SETTINGS_TABS_WITH_DIRTY.forEach(function (name) {
+      var pane = document.getElementById('tab-' + name);
+      if (!pane) return;
+      var handler = function (e) {
+        if (name === 'panel' && e.target.closest('#admin-players-fieldset')) return;
+        if (name === 'panel' && e.target.closest('#moderator-players-fieldset')) return;
+        markTabDirty(name);
+      };
+      pane.addEventListener('input', handler);
+      pane.addEventListener('change', handler);
+    });
+    (function restoreActiveTab() {
+      var saved = sessionStorage.getItem('elb_settings_cancel_tab');
+      if (!saved) return;
+      sessionStorage.removeItem('elb_settings_cancel_tab');
+      if (saved !== 'server') showTab(saved);
+    })();
+
+    function saveServerSettings() {
+      var body = new URLSearchParams({
+        srvName: document.getElementById('srvName').value,
+        srvPassword: document.getElementById('srvPassword').value,
+        srvMaxPlayers: document.getElementById('srvMaxPlayers').value,
+        srvDescription: document.getElementById('srvDescription').value,
+        srvReservePlayfields: document.getElementById('srvReservePlayfields').value,
+        srvPublic: document.getElementById('srvPublic').value,
+        srvStopPeriod: document.getElementById('srvStopPeriod').value,
+        enableDLC: document.getElementById('enableDLC').value,
+        eacActive: document.getElementById('eacActive').value,
+        disableSteamFamilySharing: document.getElementById('disableSteamFamilySharing').value,
+        maxAllowedSizeClass: document.getElementById('maxAllowedSizeClass').value,
+        allowedBlueprints: document.getElementById('allowedBlueprints').value,
+        kickPlayerWithPing: document.getElementById('kickPlayerWithPing').value,
+        playerLoginParallelCount: document.getElementById('playerLoginParallelCount').value,
+        playerLoginVipNames: document.getElementById('playerLoginVipNames').value,
+        heartbeatServer: document.getElementById('heartbeatServer').value,
+        heartbeatClient: document.getElementById('heartbeatClient').value,
+        timeoutBootingPfServer: document.getElementById('timeoutBootingPfServer').value,
+        logFlags: document.getElementById('logFlags').value,
+        mode: document.getElementById('mode').value,
+        gameName: document.getElementById('gameName').value,
+        seed: document.getElementById('seed').value,
+      });
+      fetch('/action/settings/server', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
+        .then(function (r) { return r.text(); }).then(function (text) { showToastHTML(text); clearTabDirty('server'); });
+    }
+
+    function toggleScenarioCacheModeFields() {
+      var mode = document.getElementById('scenarioCacheMode').value;
+      var off = mode === 'off' || mode === '';
+      document.getElementById('scenarioCacheEmbeddedFields').style.display = mode === 'embedded' ? '' : 'none';
+      document.getElementById('scenarioCachePanelFields').style.display = mode === 'panel' ? '' : 'none';
+      document.getElementById('scenarioCacheOwnFields').style.display = mode === 'own' ? '' : 'none';
+      document.getElementById('scenarioCachePublicUrlFields').style.display = off ? 'none' : '';
+      document.getElementById('scenarioCacheTestBtn').style.display = mode === 'own' ? '' : 'none';
+      updateScenarioCacheFtpAuthFieldsVisibility();
+      fillScenarioCachePublicUrlIfEmpty();
+    }
+    function fillScenarioCachePublicUrlIfEmpty() {
+      var field = document.getElementById('scenarioCachePublicUrlBase');
+      if (field.value) return;
+      var mode = document.getElementById('scenarioCacheMode').value;
+      if (mode === 'embedded') {
+        var extIP = field.dataset.extIp;
+        if (!extIP) return;
+        var addr = document.getElementById('scenarioCacheEmbeddedListenAddr').value || ':8899';
+        var port = addr.split(':').pop() || '8899';
+        field.value = 'http://' + extIP + ':' + port;
+      } else if (mode === 'panel') {
+        field.value = window.location.protocol + '//' + window.location.host + '/scenario-cache';
+      }
+    }
+    function onScenarioCacheFtpProtocolChange() {
+      var protocol = document.getElementById('scenarioCacheFtpProtocol').value;
+      document.getElementById('scenarioCacheFtpAuthModeRow').style.display = protocol === 'sftp' ? '' : 'none';
+      updateScenarioCacheFtpAuthFieldsVisibility();
+    }
+    function onScenarioCacheFtpAuthModeChange() {
+      updateScenarioCacheFtpAuthFieldsVisibility();
+    }
+    function updateScenarioCacheFtpAuthFieldsVisibility() {
+      var protocol = document.getElementById('scenarioCacheFtpProtocol').value;
+      var authMode = document.getElementById('scenarioCacheFtpAuthMode').value;
+      var mode = document.getElementById('scenarioCacheMode').value;
+      var useKey = protocol === 'sftp' && authMode === 'key';
+      document.getElementById('scenarioCacheFtpPasswordRow').style.display = useKey ? 'none' : '';
+      document.getElementById('scenarioCacheFtpKeyFields').style.display = (useKey && mode === 'own') ? '' : 'none';
+      syncScenarioCacheFtpKeyWidth();
+    }
+    function syncScenarioCacheFtpKeyWidth() {
+      var ids = ['scenarioCacheFtpProtocol', 'scenarioCacheFtpHost', 'scenarioCacheFtpPort', 'scenarioCacheFtpUser', 'scenarioCacheFtpAuthMode', 'scenarioCacheFtpPath'];
+      var total = 0, count = 0;
+      ids.forEach(function (id) {
+        var el = document.getElementById(id);
+        var label = el && el.closest('label');
+        if (!label || label.offsetParent === null) return;
+        total += label.getBoundingClientRect().width;
+        count++;
+      });
+      if (count === 0) return;
+      total += (count - 1) * 8;
+      document.getElementById('scenarioCacheFtpKey').style.width = total + 'px';
+    }
+    function scenarioCacheFormValue() {
+      var ftpProtocol = document.getElementById('scenarioCacheFtpProtocol').value;
+      var ftpUseKey = ftpProtocol === 'sftp' && document.getElementById('scenarioCacheFtpAuthMode').value === 'key';
+      return {
+        mode: document.getElementById('scenarioCacheMode').value,
+        publicUrlBase: document.getElementById('scenarioCachePublicUrlBase').value,
+        embeddedListenAddr: document.getElementById('scenarioCacheEmbeddedListenAddr').value,
+        panelListenPort: parseInt(document.getElementById('scenarioCachePanelListenPort').value, 10) || 0,
+        ftpProtocol: ftpProtocol,
+        ftpHost: document.getElementById('scenarioCacheFtpHost').value,
+        ftpPort: parseInt(document.getElementById('scenarioCacheFtpPort').value, 10) || 0,
+        ftpUser: document.getElementById('scenarioCacheFtpUser').value,
+        ftpPassword: ftpUseKey ? '' : document.getElementById('scenarioCacheFtpPassword').value,
+        ftpKey: ftpUseKey ? document.getElementById('scenarioCacheFtpKey').value : '',
+        ftpPath: document.getElementById('scenarioCacheFtpPath').value,
+      };
+    }
+    function saveScenarioCacheSettings() {
+      fetch('/action/settings/scenario-cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scenarioCacheFormValue()) })
+        .then(function (r) { return r.text(); }).then(function (text) { showToastHTML(text); });
+    }
+    function testScenarioCacheDestination() {
+      fetch('/action/scenario-cache/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scenarioCacheFormValue()) })
+        .then(function (r) { return r.text(); }).then(function (text) { showToastHTML(text); });
+    }
+    fillScenarioCachePublicUrlIfEmpty();
+
+    function saveGameOptions() {
+      var values = {};
+      document.querySelectorAll('.go-field').forEach(function (el) {
+        values[el.dataset.field] = el.value;
+      });
+      fetch('/action/settings/gameoptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) })
+        .then(function (r) { return r.text(); }).then(function (text) { showToastHTML(text); clearTabDirty('gameplay'); });
+    }
+
+    function updateCcRowVisibility(select) {
+      var row = select.closest('tr');
+      row.querySelector('.cc-priority').style.display = select.value === 'banner' ? '' : 'none';
+    }
+
+    function updateCcScriptVisibility(select) {
+      var row = select.closest('tr');
+      row.querySelector('.cc-text').disabled = select.value !== '';
+    }
+
+    function addCustomCommandRow() {
+      var tr = document.createElement('tr');
+      tr.className = 'cc-row';
+      var scriptOptions = '<option value="">' + I18N.ccScriptNone + '</option>';
+      CC_SCRIPTS.forEach(function (name) {
+        scriptOptions += '<option value="' + name + '">' + name + '</option>';
+      });
+      tr.innerHTML =
+        '<td><input type="checkbox" class="cc-enabled" checked></td>' +
+        '<td><input type="text" class="cc-name"></td>' +
+        '<td><input type="text" class="cc-game-desc"></td>' +
+        '<td><input type="number" class="cc-cooldown" min="0" value="0"></td>' +
+        '<td><select class="cc-script" onchange="updateCcScriptVisibility(this)">' + scriptOptions + '</select></td>' +
+        '<td><select class="cc-type" onchange="updateCcRowVisibility(this)">' +
+        '<option value="dialog">' + I18N.ccDialog + '</option><option value="chat">' + I18N.ccChat + '</option><option value="banner">' + I18N.ccBanner + '</option>' +
+        '</select></td>' +
+        '<td><input type="text" class="cc-text"></td>' +
+        '<td><select class="cc-priority" style="display:none">' +
+        '<option value="0">' + I18N.priorityAlarm + '</option><option value="1">' + I18N.priorityMessage + '</option><option value="2">' + I18N.priorityInfo + '</option>' +
+        '</select></td>' +
+        '<td><button type="button" class="btn-icon btn-danger nfi nfi-trash" title="' + I18N.delete + '" onclick="this.closest(\'tr\').remove(); markTabDirty(\'chatbot\')"></button></td>';
+      document.getElementById('custom-commands-body').appendChild(tr);
+      markTabDirty('chatbot');
+    }
+
+    function collectCommandsEnabled() {
+      var help = document.getElementById('cmdHelpEnabled').checked;
+      var out = {
+        '?': help, help: help,
+        wipe: document.getElementById('cmdWipeEnabled').checked,
+        get: document.getElementById('cmdGetEnabled').checked,
+        ship: document.getElementById('cmdShipEnabled').checked,
+        destroy: document.getElementById('cmdDestroyEnabled').checked,
+        time: document.getElementById('cmdTimeEnabled').checked,
+        survival: document.getElementById('cmdSurvivalEnabled').checked,
+        rules: document.getElementById('cmdRulesEnabled').checked,
+      };
+      var restartEl = document.getElementById('cmdRestartEnabled');
+      var stopEl = document.getElementById('cmdStopEnabled');
+      if (restartEl) out.restart = restartEl.checked;
+      if (stopEl) out.stop = stopEl.checked;
+      return out;
+    }
+
+    function collectCommandDescriptions() {
+      var out = {};
+      document.querySelectorAll('.cmd-game-desc[data-cmd]').forEach(function (el) {
+        out[el.dataset.cmd] = el.value;
+      });
+      return out;
+    }
+
+    function updateSurvivalGroupAvailability() {
+      document.getElementById('survival-kit-fieldset').style.display = document.getElementById('cmdSurvivalEnabled').checked ? '' : 'none';
+    }
+
+    function updateRulesFieldAvailability() {
+      document.getElementById('rules-text-fieldset').style.display = document.getElementById('cmdRulesEnabled').checked ? '' : 'none';
+    }
+
+    function updateWelcomeFieldsAvailability() {
+      document.getElementById('welcome-fields').style.display = document.getElementById('welcomeEnabled').checked ? '' : 'none';
+    }
+    function updateWmRowVisibility(select) {
+      select.closest('tr').querySelector('.wm-priority').style.display = select.value === 'banner' ? '' : 'none';
+    }
+    var WM_MAX_MESSAGES = 5;
+    function updateAddWelcomeMessageButton() {
+      var count = document.querySelectorAll('#welcome-messages-body .wm-row').length;
+      document.getElementById('add-welcome-message-btn').style.display = count >= WM_MAX_MESSAGES ? 'none' : '';
+    }
+    function addWelcomeMessageRow() {
+      if (document.querySelectorAll('#welcome-messages-body .wm-row').length >= WM_MAX_MESSAGES) return;
+      var tr = document.createElement('tr');
+      tr.className = 'wm-row';
+      tr.innerHTML =
+        '<td><input type="number" class="wm-delay" min="0" value="0"></td>' +
+        '<td><select class="wm-type" onchange="updateWmRowVisibility(this)">' +
+        '<option value="chat">' + I18N.ccChat + '</option><option value="banner">' + I18N.ccBanner + '</option>' +
+        '</select></td>' +
+        '<td><input type="text" class="wm-text"></td>' +
+        '<td><select class="wm-priority" style="display:none">' +
+        '<option value="0">' + I18N.priorityAlarm + '</option><option value="1">' + I18N.priorityMessage + '</option><option value="2">' + I18N.priorityInfo + '</option>' +
+        '</select></td>' +
+        '<td><button type="button" class="btn-icon btn-danger nfi nfi-trash" title="' + I18N.delete + '" onclick="this.closest(\'tr\').remove(); updateAddWelcomeMessageButton(); markTabDirty(\'chatbot\')"></button></td>';
+      document.getElementById('welcome-messages-body').appendChild(tr);
+      updateAddWelcomeMessageButton();
+      markTabDirty('chatbot');
+    }
+    function collectWelcomeMessages() {
+      var out = [];
+      document.querySelectorAll('#welcome-messages-body .wm-row').forEach(function (row) {
+        var text = row.querySelector('.wm-text').value;
+        if (!text) return;
+        out.push({
+          delaySeconds: parseInt(row.querySelector('.wm-delay').value, 10) || 0,
+          text: text,
+          actionType: row.querySelector('.wm-type').value,
+          bannerPriority: parseInt(row.querySelector('.wm-priority').value, 10) || 0,
+        });
+      });
+      return out;
+    }
+    (function initWelcomeMessages() {
+      if (!document.getElementById('welcome-messages-body')) return;
+      updateAddWelcomeMessageButton();
+    })();
+
+    function collectCustomCommands() {
+      var out = [];
+      document.querySelectorAll('#custom-commands-body .cc-row').forEach(function (row) {
+        var name = row.querySelector('.cc-name').value.trim().toLowerCase();
+        if (!name) return;
+        out.push({
+          name: name,
+          gameDescription: row.querySelector('.cc-game-desc').value,
+          cooldownMinutes: parseInt(row.querySelector('.cc-cooldown').value, 10) || 0,
+          scriptName: row.querySelector('.cc-script').value,
+          actionType: row.querySelector('.cc-type').value,
+          text: row.querySelector('.cc-text').value,
+          bannerPriority: parseInt(row.querySelector('.cc-priority').value, 10) || 0,
+          enabled: row.querySelector('.cc-enabled').checked,
+        });
+      });
+      return out;
+    }
+
+    function saveChatbotSettings() {
+      var body = {
+        wipeCooldownHours: parseInt(document.getElementById('wipeCooldownHours').value, 10) || 0,
+        vehicleTeleportCooldownMinutes: parseInt(document.getElementById('vehicleTeleportCooldownMinutes').value, 10) || 0,
+        hardWipe: document.getElementById('hardWipe').checked,
+        survivalCredits: parseFloat(document.getElementById('survivalCredits').value) || 0,
+        survivalItems: collectSurvivalItems(),
+        commandsEnabled: collectCommandsEnabled(),
+        commandDescriptions: collectCommandDescriptions(),
+        rulesText: document.getElementById('rulesText').value,
+        customCommands: collectCustomCommands(),
+        serverSenderName: document.getElementById('serverSenderName').value,
+        notifyPlayerPresence: (document.getElementById('notifyPlayerPresence') || {}).checked,
+        welcomeMessage: {
+          enabled: document.getElementById('welcomeEnabled').checked,
+          messages: collectWelcomeMessages(),
+        },
+      };
+      fetch('/action/settings/chatbot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.text(); }).then(function (text) { showToastHTML(text); clearTabDirty('chatbot'); });
+    }
+
+    var kitItemNameToId = {{.ItemIDsJSON}};
+    var kitItemIdToName = {};
+    for (var kitN in kitItemNameToId) kitItemIdToName[kitItemNameToId[kitN]] = kitN;
+    var kitDisplayNames = {{.DisplayNamesJSON}};
+    var kitDescriptions = {{.DescriptionsJSON}};
+    initItemRenderConfig({{.ItemRenderConfigJSON}});
+
+    var CC_SCRIPTS = {{.ScriptsJSON}};
+
+    var KIT_MAX_ITEMS = 10;
+
+    function updateAddSurvivalItemButton() {
+      var count = document.querySelectorAll('#survival-items-list .kit-item-row').length;
+      document.getElementById('add-survival-item-btn').style.display = count >= KIT_MAX_ITEMS ? 'none' : '';
+    }
+
+    function buildKitItemRow(itemId, itemName, count) {
+      var row = document.createElement('div');
+      row.className = 'kit-item-row';
+      row.dataset.itemId = itemId || '';
+      row.innerHTML =
+        '<img class="kit-item-icon" style="' + (itemId ? '' : 'display:none') + '" src="' + (itemName ? '/icon/' + encodeURIComponent(itemName) : '') + '" onerror="this.style.visibility=\'hidden\'">' +
+        '<input type="text" class="kit-item-search item-picker-search" style="margin-bottom:0" placeholder="' + I18N.itemSearchPlaceholder + '" value="' + (itemName || '') + '" autocomplete="off">' +
+        '<div class="kit-item-dropdown item-picker-list" style="display:none"></div>' +
+        '<input type="number" class="kit-item-count" min="1" value="' + (count || 1) + '">' +
+        '<button type="button" class="btn-icon btn-danger nfi nfi-trash" title="' + I18N.delete + '" onclick="this.closest(\'.kit-item-row\').remove(); updateAddSurvivalItemButton(); markTabDirty(\'chatbot\')"></button>';
+      var search = row.querySelector('.kit-item-search');
+      var dropdown = row.querySelector('.kit-item-dropdown');
+      search.addEventListener('input', function () { renderKitItemDropdown(row, search.value); });
+      search.addEventListener('focus', function () { renderKitItemDropdown(row, search.value); });
+      search.addEventListener('blur', function () { setTimeout(function () { dropdown.style.display = 'none'; hideItemTooltip(); }, 150); });
+      return row;
+    }
+
+    function renderKitItemDropdown(row, query) {
+      var dropdown = row.querySelector('.kit-item-dropdown');
+      hideItemTooltip();
+      applyItemDarkBg(dropdown);
+      var names = Object.keys(kitItemNameToId).sort();
+      var matches = names.filter(function (n) { return itemMatchesSearch(kitDisplayNames, n, query, kitItemNameToId[n]); });
+      dropdown.innerHTML = '';
+      if (matches.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'item-picker-empty';
+        empty.textContent = I18N.noResults;
+        dropdown.appendChild(empty);
+      } else {
+        matches.slice(0, 100).forEach(function (n) {
+          var id = kitItemNameToId[n];
+          var itemRow = document.createElement('div');
+          itemRow.className = 'item-picker-row';
+          var img = document.createElement('img');
+          img.loading = 'lazy';
+          img.src = '/icon/' + encodeURIComponent(n);
+          img.alt = '';
+          img.onerror = function () { img.style.visibility = 'hidden'; };
+          var span = document.createElement('span');
+          span.innerHTML = itemDisplayHtml(kitDisplayNames, n);
+          itemRow.appendChild(img);
+          itemRow.appendChild(span);
+          attachItemTooltip(itemRow, kitDescriptions, n);
+          itemRow.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            pickKitItem(row, id, n);
+          });
+          dropdown.appendChild(itemRow);
+        });
+      }
+      dropdown.style.display = '';
+      positionItemPickerDropdown(row, dropdown);
+    }
+
+    function pickKitItem(row, id, name) {
+      row.dataset.itemId = id;
+      row.querySelector('.kit-item-search').value = name;
+      var icon = row.querySelector('.kit-item-icon');
+      icon.src = '/icon/' + encodeURIComponent(name);
+      icon.style.display = '';
+      icon.style.visibility = '';
+      row.querySelector('.kit-item-dropdown').style.display = 'none';
+      hideItemTooltip();
+      markTabDirty('chatbot');
+    }
+
+    function addSurvivalItemRow() {
+      if (document.querySelectorAll('#survival-items-list .kit-item-row').length >= KIT_MAX_ITEMS) return;
+      document.getElementById('survival-items-list').appendChild(buildKitItemRow(null, '', 1));
+      updateAddSurvivalItemButton();
+      markTabDirty('chatbot');
+    }
+
+    function collectSurvivalItems() {
+      var out = [];
+      document.querySelectorAll('#survival-items-list .kit-item-row').forEach(function (row) {
+        var id = parseInt(row.dataset.itemId, 10);
+        if (!id) return; 
+        out.push({ itemId: id, count: parseInt(row.querySelector('.kit-item-count').value, 10) || 1 });
+      });
+      return out;
+    }
+
+    (function initSurvivalItems() {
+      var initial = {{.SurvivalItemsJSON}};
+      var list = document.getElementById('survival-items-list');
+      if (!list) return;
+      (initial || []).forEach(function (it) {
+        var name = kitItemIdToName[it.itemId] || '';
+        list.appendChild(buildKitItemRow(it.itemId, name, it.count));
+      });
+      updateAddSurvivalItemButton();
+    })();
+
+    function setCheckedIfExists(params, id, name) {
+      var el = document.getElementById(id);
+      if (el) params.set(name, el.checked ? 'on' : '');
+    }
+    function setValueIfExists(params, id, name) {
+      var el = document.getElementById(id);
+      if (el) params.set(name, el.value);
+    }
+    function savePanelSettings() {
+      var colIds = ['colFaction', 'colCoords', 'colKills', 'colDied', 'colCredits', 'colExp', 'colPing', 'colLastOnline', 'colOnlineHours', 'colQuickLinks'];
+      var params = new URLSearchParams();
+      setCheckedIfExists(params, 'autoRestartOnHang', 'autoRestartOnHang');
+      setCheckedIfExists(params, 'logHangs', 'logHangs');
+      setValueIfExists(params, 'minHistoryIntervalMinutes', 'minHistoryIntervalMinutes');
+      setValueIfExists(params, 'maxHistoryEntries', 'maxHistoryEntries');
+      setValueIfExists(params, 'structuresBackupIntervalMinutes', 'structuresBackupIntervalMinutes');
+      setValueIfExists(params, 'structuresMaxBackupEntries', 'structuresMaxBackupEntries');
+      setCheckedIfExists(params, 'structuresRequireOwnerNearby', 'structuresRequireOwnerNearby');
+      setCheckedIfExists(params, 'item-render-localized-names', 'item-render-localized-names');
+      setCheckedIfExists(params, 'item-render-show-descriptions', 'item-render-show-descriptions');
+      setCheckedIfExists(params, 'item-render-tags', 'item-render-tags');
+      setCheckedIfExists(params, 'item-render-dark-bg', 'item-render-dark-bg');
+      setCheckedIfExists(params, 'forceOverwriteInventory', 'forceOverwriteInventory');
+      setCheckedIfExists(params, 'cleanOldBuildLogs', 'cleanOldBuildLogs');
+      setValueIfExists(params, 'manualActionWarnMinutes', 'manualActionWarnMinutes');
+      setCheckedIfExists(params, 'checkUpdatesPeriodically', 'checkUpdatesPeriodically');
+      setCheckedIfExists(params, 'auditUnauthorizedApiRequests', 'auditUnauthorizedApiRequests');
+      setCheckedIfExists(params, 'auditInventoryFuelAnomaly', 'auditInventoryFuelAnomaly');
+      setCheckedIfExists(params, 'auditWipeLeftover', 'auditWipeLeftover');
+      setCheckedIfExists(params, 'auditPositionJump', 'auditPositionJump');
+      setCheckedIfExists(params, 'auditPermissionFactionChange', 'auditPermissionFactionChange');
+      setCheckedIfExists(params, 'auditLoginTracking', 'auditLoginTracking');
+      setValueIfExists(params, 'monitoringRetentionDays', 'monitoringRetentionDays');
+      colIds.forEach(function (id) { setCheckedIfExists(params, id, id); });
+      document.querySelectorAll('.mount-checkbox:checked').forEach(function (cb) { params.append('enabledMounts', cb.value); });
+      setValueIfExists(params, 'warningPercent', 'warningPercent');
+      setValueIfExists(params, 'criticalPercent', 'criticalPercent');
+      ['Light', 'Dark'].forEach(function (theme) {
+        ['Global', 'Faction', 'Alliance', 'Server', 'Singleplayer'].forEach(function (ch) {
+          setValueIfExists(params, 'chatColor' + theme + ch, 'chatColor' + theme + ch);
+        });
+      });
+      ['Light', 'Dark'].forEach(function (theme) {
+        ['Server', 'Admin', 'Vip'].forEach(function (t) {
+          var id = 'chatColorSender' + theme + t;
+          setValueIfExists(params, id, id);
+        });
+      });
+      ['Light', 'Dark'].forEach(function (theme) {
+        ['Alarm', 'Message', 'Info'].forEach(function (t) {
+          var id = 'chatColorBanner' + theme + t;
+          setValueIfExists(params, id, id);
+        });
+      });
+      fetch('/action/settings/panel', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() })
+        .then(function (r) { return r.text(); }).then(function (text) { showToastHTML(text); clearTabDirty('panel'); });
+    }
+
+    {{if .IsAdmin}}
+    {{$d0b := index .Config.Backup.Destinations 0}}
+    {{$d1b := index .Config.Backup.Destinations 1}}
+    var backupDest = [
+      { type: {{$d0b.Type}}, diskPath: {{$d0b.DiskPath}}, retention: { last: {{$d0b.Retention.Last}}, hourly: {{$d0b.Retention.Hourly}}, daily: {{$d0b.Retention.Daily}}, weekly: {{$d0b.Retention.Weekly}}, monthly: {{$d0b.Retention.Monthly}}, yearly: {{$d0b.Retention.Yearly}} } },
+      {
+        type: {{$d1b.Type}}, diskPath: {{$d1b.DiskPath}},
+        ftpProtocol: {{$d1b.FTPProtocol}}, ftpHost: {{$d1b.FTPHost}}, ftpPort: {{$d1b.FTPPort}}, ftpUser: {{$d1b.FTPUser}},
+        ftpPassword: {{$d1b.FTPPassword}}, ftpKey: {{$d1b.FTPKey}}, ftpPath: {{$d1b.FTPPath}},
+        s3Endpoint: {{$d1b.S3Endpoint}}, s3Region: {{$d1b.S3Region}}, s3Bucket: {{$d1b.S3Bucket}},
+        s3AccessKey: {{$d1b.S3AccessKey}}, s3SecretKey: {{$d1b.S3SecretKey}},
+        retention: { last: {{$d1b.Retention.Last}}, hourly: {{$d1b.Retention.Hourly}}, daily: {{$d1b.Retention.Daily}}, weekly: {{$d1b.Retention.Weekly}}, monthly: {{$d1b.Retention.Monthly}}, yearly: {{$d1b.Retention.Yearly}} }
+      }
+    ];
+    {{else}}
+    var backupDest = [{}, {}];
+    {{end}}
+    var BACKUP_I18N = {
+      slotPrimary: {{t "settings.backup.slotPrimary"}},
+      slotSecondary: {{t "settings.backup.slotSecondary"}},
+      addSecondary: {{t "settings.backup.addSecondary"}},
+      edit: {{t "settings.backup.edit"}},
+      remove: {{t "settings.backup.remove"}},
+      wizardTitleEdit: {{t "settings.backup.wizardTitleEdit"}},
+      placementLabel: {{t "settings.backup.placementLabel"}},
+      placementLocal: {{t "settings.backup.placementLocal"}},
+      placementRemote: {{t "settings.backup.placementRemote"}},
+      remoteTypeFtp: {{t "settings.backup.remoteTypeFtp"}},
+      remoteTypeS3: {{t "settings.backup.remoteTypeS3"}},
+      type: {{t "settings.backup.type"}},
+      typeSnapshot: {{t "settings.backup.type.snapshot"}},
+      typeDisk: {{t "settings.backup.type.disk"}},
+      typeFtp: {{t "settings.backup.type.ftp"}},
+      typeSftp: {{t "settings.backup.type.sftp"}},
+      typeS3: {{t "settings.backup.type.s3"}},
+      diskPath: {{t "settings.backup.diskPath"}},
+      diskPathPlaceholder: {{t "settings.backup.diskPathPlaceholder"}},
+      diskPathRequired: {{t "settings.backup.diskPathRequired"}},
+      ftpProtocol: {{t "settings.backup.ftpProtocol"}},
+      ftpProtocolFtp: {{t "settings.backup.ftpProtocolFtp"}},
+      ftpProtocolSftp: {{t "settings.backup.ftpProtocolSftp"}},
+      ftpHost: {{t "settings.backup.ftpHost"}},
+      ftpPort: {{t "settings.backup.ftpPort"}},
+      ftpUser: {{t "settings.backup.ftpUser"}},
+      ftpAuthMode: {{t "settings.backup.ftpAuthMode"}},
+      ftpAuthPassword: {{t "settings.backup.ftpAuthPassword"}},
+      ftpAuthKey: {{t "settings.backup.ftpAuthKey"}},
+      ftpPath: {{t "settings.backup.ftpPath"}},
+      ftpPathPlaceholder: {{t "settings.backup.ftpPathPlaceholder"}},
+      ftpRequired: {{t "settings.backup.ftpRequired"}},
+      ftpKeyOrPasswordRequired: {{t "settings.backup.ftpKeyOrPasswordRequired"}},
+      s3Endpoint: {{t "settings.backup.s3Endpoint"}},
+      s3EndpointPlaceholder: {{t "settings.backup.s3EndpointPlaceholder"}},
+      s3Region: {{t "settings.backup.s3Region"}},
+      s3Bucket: {{t "settings.backup.s3Bucket"}},
+      s3AccessKey: {{t "settings.backup.s3AccessKey"}},
+      s3SecretKey: {{t "settings.backup.s3SecretKey"}},
+      s3Required: {{t "settings.backup.s3Required"}},
+      testConnection: {{t "settings.backup.testConnection"}},
+      testingConnection: {{t "settings.backup.testingConnection"}},
+      retentionLast: {{t "settings.backup.retentionLast"}},
+      retentionHourly: {{t "settings.backup.retentionHourly"}},
+      retentionDaily: {{t "settings.backup.retentionDaily"}},
+      retentionWeekly: {{t "settings.backup.retentionWeekly"}},
+      retentionMonthly: {{t "settings.backup.retentionMonthly"}},
+      retentionYearly: {{t "settings.backup.retentionYearly"}},
+      retentionAtLeastOneRequired: {{t "settings.backup.retentionAtLeastOneRequired"}},
+      clearAll: {{t "settings.backup.clearAll"}},
+      confirmClearTitle: {{t "settings.backup.confirmClearTitle"}},
+      confirmClearQuestion: {{t "settings.backup.confirmClearQuestion"}},
+      confirmClearLabel: {{t "settings.backup.confirmClearLabel"}},
+      confirmClearWord: {{t "settings.backup.confirmClearWord"}},
+      requestError: {{t "common.requestError"}},
+    };
+
+    function retentionFields(dest, r) {
+      var p = 'ret' + dest;
+      return '<div class="field-grid">' +
+        '<label>' + BACKUP_I18N.retentionLast + '<input type="number" id="' + p + 'Last" min="0" value="' + r.last + '"></label>' +
+        '<label>' + BACKUP_I18N.retentionHourly + '<input type="number" id="' + p + 'Hourly" min="0" value="' + r.hourly + '"></label>' +
+        '<label>' + BACKUP_I18N.retentionDaily + '<input type="number" id="' + p + 'Daily" min="0" value="' + r.daily + '"></label>' +
+        '<label>' + BACKUP_I18N.retentionWeekly + '<input type="number" id="' + p + 'Weekly" min="0" value="' + r.weekly + '"></label>' +
+        '<label>' + BACKUP_I18N.retentionMonthly + '<input type="number" id="' + p + 'Monthly" min="0" value="' + r.monthly + '"></label>' +
+        '<label>' + BACKUP_I18N.retentionYearly + '<input type="number" id="' + p + 'Yearly" min="0" value="' + r.yearly + '"></label>' +
+      '</div>';
+    }
+
+    function renderBackupDestinationsUI() {
+      if (!document.getElementById('backup-destinations')) return;
+      var html = '<fieldset class="player-group">' +
+        '<legend>' + BACKUP_I18N.slotPrimary + ' (' + BACKUP_I18N.typeSnapshot + ')</legend>' +
+        retentionFields(0, backupDest[0].retention) +
+        '<button type="button" class="btn-small" onclick="openClearWizard(0)">' + BACKUP_I18N.clearAll + '</button>' +
+      '</fieldset>';
+      var d1 = backupDest[1];
+      if (d1.type) {
+        var typeLabel = BACKUP_I18N.typeSnapshot;
+        var detail = '';
+        if (d1.type === 'disk') {
+          typeLabel = BACKUP_I18N.typeDisk;
+          detail = ': ' + d1.diskPath;
+        } else if (d1.type === 'ftp') {
+          typeLabel = d1.ftpProtocol === 'sftp' ? BACKUP_I18N.typeSftp : BACKUP_I18N.typeFtp;
+          detail = ': ' + d1.ftpHost + (d1.ftpPath ? ' ' + d1.ftpPath : '');
+        } else if (d1.type === 's3') {
+          typeLabel = BACKUP_I18N.typeS3;
+          detail = ': ' + d1.s3Bucket + '@' + d1.s3Endpoint;
+        }
+        html += '<fieldset class="player-group">' +
+          '<legend>' + BACKUP_I18N.slotSecondary + ' (' + typeLabel + detail + ')' +
+            ' <span class="icon-btn nfi nfi-pencil" title="' + BACKUP_I18N.edit + '" onclick="openBackupWizard()"></span>' +
+            '<span class="icon-btn nfi nfi-trash" title="' + BACKUP_I18N.remove + '" onclick="removeSecondaryDestination()"></span>' +
+          '</legend>' +
+          retentionFields(1, d1.retention) +
+          '<button type="button" class="btn-small" onclick="openClearWizard(1)">' + BACKUP_I18N.clearAll + '</button>' +
+        '</fieldset>';
+      } else {
+        html += '<button type="button" class="btn-small btn-primary" onclick="openBackupWizard()">' + BACKUP_I18N.addSecondary + '</button>';
+      }
+      document.getElementById('backup-destinations').innerHTML = html;
+    }
+    renderBackupDestinationsUI();
+
+    function saveRetention() {
+      var r0 = {
+        last: atoiOrZero(document.getElementById('ret0Last').value),
+        hourly: atoiOrZero(document.getElementById('ret0Hourly').value),
+        daily: atoiOrZero(document.getElementById('ret0Daily').value),
+        weekly: atoiOrZero(document.getElementById('ret0Weekly').value),
+        monthly: atoiOrZero(document.getElementById('ret0Monthly').value),
+        yearly: atoiOrZero(document.getElementById('ret0Yearly').value),
+      };
+      if (!r0.last && !r0.hourly && !r0.daily && !r0.weekly && !r0.monthly && !r0.yearly) {
+        showToastHTML(BACKUP_I18N.retentionAtLeastOneRequired);
+        return;
+      }
+      backupDest[0].retention = r0;
+      if (backupDest[1].type) {
+        backupDest[1].retention = {
+          last: atoiOrZero(document.getElementById('ret1Last').value),
+          hourly: atoiOrZero(document.getElementById('ret1Hourly').value),
+          daily: atoiOrZero(document.getElementById('ret1Daily').value),
+          weekly: atoiOrZero(document.getElementById('ret1Weekly').value),
+          monthly: atoiOrZero(document.getElementById('ret1Monthly').value),
+          yearly: atoiOrZero(document.getElementById('ret1Yearly').value),
+        };
+      }
+      saveBackupConfig();
+    }
+
+    function openClearWizard(dest) {
+      document.getElementById('modal-title').textContent = BACKUP_I18N.confirmClearTitle;
+      document.getElementById('modal-body').innerHTML =
+        '<div class="task-form task-form-column">' +
+        '<p>' + BACKUP_I18N.confirmClearQuestion + '</p>' +
+        '<label><span>' + BACKUP_I18N.confirmClearLabel + '</span><input type="text" id="wizClearWord" oninput="updateClearButton()" placeholder="' + BACKUP_I18N.confirmClearWord + '"></label>' +
+        '</div>';
+      var btn = document.getElementById('modal-confirm-btn');
+      btn.disabled = true;
+      btn.title = '';
+      btn.onclick = function () { confirmClearDestination(dest); };
+      showModal();
+    }
+    function updateClearButton() {
+      var val = document.getElementById('wizClearWord').value;
+      document.getElementById('modal-confirm-btn').disabled = val !== BACKUP_I18N.confirmClearWord;
+    }
+    function confirmClearDestination(dest) {
+      closeModal();
+      fetch('/action/settings/backup/clear?dest=' + dest, { method: 'POST' })
+        .then(function (r) { return r.text(); })
+        .then(showToast)
+        .catch(function () { showToastHTML(BACKUP_I18N.requestError); });
+    }
+
+    var WIPE_CONFIRM_WORD = {{t "maintenance.localDbConfirmWord"}};
+    function openWipeLocalDBConfirm() {
+      var boxes = document.querySelectorAll('input[name="wipe-store"]:checked');
+      var stores = Array.prototype.map.call(boxes, function (b) { return b.value; });
+      if (stores.length === 0) { showToastHTML({{t "maintenance.localDbNoneSelected"}}); return; }
+      document.getElementById('modal-title').textContent = {{t "maintenance.localDbConfirmTitle"}};
+      document.getElementById('modal-body').innerHTML =
+        '<div class="task-form task-form-column">' +
+        '<p>' + {{t "maintenance.localDbConfirmBody"}}.replace('{word}', WIPE_CONFIRM_WORD) + '</p>' +
+        '<input type="text" id="wipeConfirmInput" oninput="updateWipeConfirmButton()" autocomplete="off">' +
+        '</div>';
+      var btn = document.getElementById('modal-confirm-btn');
+      btn.disabled = true;
+      btn.onclick = function () { submitWipeLocalDB(stores); };
+      showModal();
+    }
+    function updateWipeConfirmButton() {
+      var input = document.getElementById('wipeConfirmInput');
+      document.getElementById('modal-confirm-btn').disabled = !input || input.value !== WIPE_CONFIRM_WORD;
+    }
+    function submitWipeLocalDB(stores) {
+      closeModal();
+      fetch('/action/maintenance/wipe-local-db', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stores: stores })
+      })
+        .then(function (r) {
+          if (!r.ok) { return r.text().then(function (t) { throw new Error(t); }); }
+          showToastHTML({{t "maintenance.localDbDone"}});
+          document.querySelectorAll('input[name="wipe-store"]').forEach(function (b) { b.checked = false; });
+        })
+        .catch(function (err) { showToastHTML(err.message); });
+    }
+
+    function showModalError(msg) {
+      var el = document.getElementById('modal-error');
+      el.textContent = msg;
+      el.style.display = msg ? '' : 'none';
+    }
+    function clearModalError() { showModalError(''); }
+    function showModal() {
+      clearModalError();
+      document.getElementById('modal-overlay').style.display = 'flex';
+    }
+    function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+
+    function openBackupWizard() {
+      var existing = backupDest[1];
+      var isEdit = !!existing.type;
+      document.getElementById('modal-title').textContent = isEdit ? BACKUP_I18N.wizardTitleEdit : BACKUP_I18N.addSecondary;
+      var isRemoteExisting = isEdit && (existing.type === 'ftp' || existing.type === 's3');
+      var placement = isRemoteExisting ? 'remote' : 'local';
+      var diskPath = (isEdit && existing.type === 'disk') ? existing.diskPath : '';
+      var remoteType = (isRemoteExisting ? existing.type : 'ftp');
+      var isFtpExisting = isRemoteExisting && existing.type === 'ftp';
+      var isS3Existing = isRemoteExisting && existing.type === 's3';
+      var ftpProtocol = isFtpExisting ? (existing.ftpProtocol || 'ftp') : 'ftp';
+      var ftpHost = isFtpExisting ? existing.ftpHost : '';
+      var ftpPort = isFtpExisting && existing.ftpPort ? existing.ftpPort : '';
+      var ftpUser = isFtpExisting ? existing.ftpUser : '';
+      var ftpPassword = isFtpExisting ? existing.ftpPassword : '';
+      var ftpKey = isFtpExisting ? existing.ftpKey : '';
+      var ftpAuthMode = (isFtpExisting && existing.ftpKey) ? 'key' : 'password';
+      var ftpPath = isFtpExisting ? existing.ftpPath : '';
+      var s3Endpoint = isS3Existing ? existing.s3Endpoint : '';
+      var s3Region = isS3Existing ? existing.s3Region : '';
+      var s3Bucket = isS3Existing ? existing.s3Bucket : '';
+      var s3AccessKey = isS3Existing ? existing.s3AccessKey : '';
+      var s3SecretKey = isS3Existing ? existing.s3SecretKey : '';
+      var showFtpKeyRow = ftpProtocol === 'sftp' && ftpAuthMode === 'key';
+      document.getElementById('modal-body').innerHTML =
+        '<div class="task-form task-form-column">' +
+        '<label>' + BACKUP_I18N.placementLabel +
+          '<select id="wizPlacement" onchange="onWizardPlacementChange()">' +
+            '<option value="local"' + (placement === 'local' ? ' selected' : '') + '>' + BACKUP_I18N.placementLocal + '</option>' +
+            '<option value="remote"' + (placement === 'remote' ? ' selected' : '') + '>' + BACKUP_I18N.placementRemote + '</option>' +
+          '</select></label>' +
+        '<div id="wiz-local-fields" style="' + (placement !== 'local' ? 'display:none' : '') + '">' +
+          '<label><span>' + BACKUP_I18N.diskPath + '</span><input type="text" id="wizDiskPath" value="' + diskPath + '" placeholder="' + BACKUP_I18N.diskPathPlaceholder + '"></label>' +
+        '</div>' +
+        '<div id="wiz-remote-fields" style="' + (placement !== 'remote' ? 'display:none' : '') + '">' +
+          '<label>' + BACKUP_I18N.type +
+            '<select id="wizRemoteType" onchange="onWizardRemoteTypeChange()">' +
+              '<option value="ftp"' + (remoteType === 'ftp' ? ' selected' : '') + '>' + BACKUP_I18N.remoteTypeFtp + '</option>' +
+              '<option value="s3"' + (remoteType === 's3' ? ' selected' : '') + '>' + BACKUP_I18N.remoteTypeS3 + '</option>' +
+            '</select></label>' +
+          '<div id="wiz-ftp-fields" style="' + (remoteType !== 'ftp' ? 'display:none' : '') + '">' +
+            '<label>' + BACKUP_I18N.ftpProtocol +
+              '<select id="wizFtpProtocol" onchange="onWizardFtpProtocolChange()">' +
+                '<option value="ftp"' + (ftpProtocol === 'ftp' ? ' selected' : '') + '>' + BACKUP_I18N.ftpProtocolFtp + '</option>' +
+                '<option value="sftp"' + (ftpProtocol === 'sftp' ? ' selected' : '') + '>' + BACKUP_I18N.ftpProtocolSftp + '</option>' +
+              '</select></label>' +
+            '<label><span>' + BACKUP_I18N.ftpHost + '</span><input type="text" id="wizFtpHost" value="' + ftpHost + '"></label>' +
+            '<label><span>' + BACKUP_I18N.ftpPort + '</span><input type="number" id="wizFtpPort" value="' + ftpPort + '" placeholder="' + (ftpProtocol === 'sftp' ? '22' : '21') + '"></label>' +
+            '<label><span>' + BACKUP_I18N.ftpUser + '</span><input type="text" id="wizFtpUser" value="' + ftpUser + '"></label>' +
+            '<label id="wiz-ftp-authmode-row" style="' + (ftpProtocol !== 'sftp' ? 'display:none' : '') + '">' + BACKUP_I18N.ftpAuthMode +
+              '<select id="wizFtpAuthMode" onchange="onWizardFtpAuthModeChange()">' +
+                '<option value="password"' + (ftpAuthMode === 'password' ? ' selected' : '') + '>' + BACKUP_I18N.ftpAuthPassword + '</option>' +
+                '<option value="key"' + (ftpAuthMode === 'key' ? ' selected' : '') + '>' + BACKUP_I18N.ftpAuthKey + '</option>' +
+              '</select></label>' +
+            '<label id="wiz-ftp-password-row" style="' + (showFtpKeyRow ? 'display:none' : '') + '"><span>' + BACKUP_I18N.ftpAuthPassword + '</span><input type="text" id="wizFtpPassword" value="' + ftpPassword + '"></label>' +
+            '<label id="wiz-ftp-key-row" style="' + (showFtpKeyRow ? '' : 'display:none') + '"><span>' + BACKUP_I18N.ftpAuthKey + '</span><textarea id="wizFtpKey" rows="4">' + ftpKey + '</textarea></label>' +
+            '<label><span>' + BACKUP_I18N.ftpPath + '</span><input type="text" id="wizFtpPath" value="' + ftpPath + '" placeholder="' + BACKUP_I18N.ftpPathPlaceholder + '"></label>' +
+          '</div>' +
+          '<div id="wiz-s3-fields" style="' + (remoteType !== 's3' ? 'display:none' : '') + '">' +
+            '<label><span>' + BACKUP_I18N.s3Endpoint + '</span><input type="text" id="wizS3Endpoint" value="' + s3Endpoint + '" placeholder="' + BACKUP_I18N.s3EndpointPlaceholder + '"></label>' +
+            '<label><span>' + BACKUP_I18N.s3Region + '</span><input type="text" id="wizS3Region" value="' + s3Region + '"></label>' +
+            '<label><span>' + BACKUP_I18N.s3Bucket + '</span><input type="text" id="wizS3Bucket" value="' + s3Bucket + '"></label>' +
+            '<label><span>' + BACKUP_I18N.s3AccessKey + '</span><input type="text" id="wizS3AccessKey" value="' + s3AccessKey + '"></label>' +
+            '<label><span>' + BACKUP_I18N.s3SecretKey + '</span><input type="text" id="wizS3SecretKey" value="' + s3SecretKey + '"></label>' +
+          '</div>' +
+          '<button type="button" class="btn-small" id="wiz-test-btn" onclick="testBackupConnection()">' + BACKUP_I18N.testConnection + '</button>' +
+          '<span id="wiz-test-result" class="wiz-test-result"></span>' +
+        '</div>' +
+        '</div>';
+      document.getElementById('modal-confirm-btn').onclick = confirmBackupWizard;
+      showModal();
+    }
+
+    function onWizardPlacementChange() {
+      var placement = document.getElementById('wizPlacement').value;
+      document.getElementById('wiz-local-fields').style.display = placement === 'local' ? '' : 'none';
+      document.getElementById('wiz-remote-fields').style.display = placement === 'remote' ? '' : 'none';
+    }
+
+    function onWizardRemoteTypeChange() {
+      var remoteType = document.getElementById('wizRemoteType').value;
+      document.getElementById('wiz-ftp-fields').style.display = remoteType === 'ftp' ? '' : 'none';
+      document.getElementById('wiz-s3-fields').style.display = remoteType === 's3' ? '' : 'none';
+    }
+
+    function onWizardFtpProtocolChange() {
+      var protocol = document.getElementById('wizFtpProtocol').value;
+      var portInput = document.getElementById('wizFtpPort');
+      if (!portInput.value) portInput.value = protocol === 'sftp' ? '22' : '21';
+      document.getElementById('wiz-ftp-authmode-row').style.display = protocol === 'sftp' ? '' : 'none';
+      updateFtpAuthFieldsVisibility();
+    }
+
+    function onWizardFtpAuthModeChange() {
+      updateFtpAuthFieldsVisibility();
+    }
+
+    function updateFtpAuthFieldsVisibility() {
+      var protocol = document.getElementById('wizFtpProtocol').value;
+      var authMode = document.getElementById('wizFtpAuthMode').value;
+      var useKey = protocol === 'sftp' && authMode === 'key';
+      document.getElementById('wiz-ftp-password-row').style.display = useKey ? 'none' : '';
+      document.getElementById('wiz-ftp-key-row').style.display = useKey ? '' : 'none';
+    }
+
+    function readWizardRemoteDestination() {
+      var remoteType = document.getElementById('wizRemoteType').value;
+      if (remoteType === 'ftp') {
+        var protocol = document.getElementById('wizFtpProtocol').value;
+        var authMode = document.getElementById('wizFtpAuthMode').value;
+        var useKey = protocol === 'sftp' && authMode === 'key';
+        return {
+          type: 'ftp',
+          ftpProtocol: protocol,
+          ftpHost: document.getElementById('wizFtpHost').value.trim(),
+          ftpPort: atoiOrZero(document.getElementById('wizFtpPort').value),
+          ftpUser: document.getElementById('wizFtpUser').value.trim(),
+          ftpPassword: useKey ? '' : document.getElementById('wizFtpPassword').value,
+          ftpKey: useKey ? document.getElementById('wizFtpKey').value : '',
+          ftpPath: document.getElementById('wizFtpPath').value.trim(),
+        };
+      }
+      return {
+        type: 's3',
+        s3Endpoint: document.getElementById('wizS3Endpoint').value.trim(),
+        s3Region: document.getElementById('wizS3Region').value.trim(),
+        s3Bucket: document.getElementById('wizS3Bucket').value.trim(),
+        s3AccessKey: document.getElementById('wizS3AccessKey').value.trim(),
+        s3SecretKey: document.getElementById('wizS3SecretKey').value,
+      };
+    }
+
+    function validateWizardRemoteDestination(d) {
+      if (d.type === 'ftp') {
+        if (!d.ftpHost || !d.ftpUser) return BACKUP_I18N.ftpRequired;
+        if (d.ftpProtocol === 'sftp' && !d.ftpPassword && !d.ftpKey) return BACKUP_I18N.ftpKeyOrPasswordRequired;
+        return '';
+      }
+      if (!d.s3Endpoint || !d.s3Bucket || !d.s3AccessKey || !d.s3SecretKey) return BACKUP_I18N.s3Required;
+      return '';
+    }
+
+    function testBackupConnection() {
+      var d = readWizardRemoteDestination();
+      var err = validateWizardRemoteDestination(d);
+      var resultEl = document.getElementById('wiz-test-result');
+      if (err) {
+        resultEl.textContent = err;
+        resultEl.className = 'wiz-test-result wiz-test-fail';
+        return;
+      }
+      var btn = document.getElementById('wiz-test-btn');
+      btn.disabled = true;
+      resultEl.textContent = BACKUP_I18N.testingConnection;
+      resultEl.className = 'wiz-test-result';
+      fetch('/action/settings/backup/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) })
+        .then(function (r) { return r.text().then(function (text) { return { ok: r.ok, text: text }; }); })
+        .then(function (res) {
+          resultEl.textContent = res.text;
+          resultEl.className = 'wiz-test-result ' + (res.ok ? 'wiz-test-ok' : 'wiz-test-fail');
+        })
+        .catch(function () {
+          resultEl.textContent = BACKUP_I18N.requestError;
+          resultEl.className = 'wiz-test-result wiz-test-fail';
+        })
+        .finally(function () { btn.disabled = false; });
+    }
+
+    function confirmBackupWizard() {
+      var placement = document.getElementById('wizPlacement').value;
+      var existing = backupDest[1];
+      if (placement === 'remote') {
+        var d = readWizardRemoteDestination();
+        var err = validateWizardRemoteDestination(d);
+        if (err) {
+          showModalError(err);
+          return;
+        }
+        d.retention = existing.type ? existing.retention : { last: 0, hourly: 0, daily: 0, weekly: 0, monthly: 0, yearly: 0 };
+        backupDest[1] = d;
+        closeModal();
+        renderBackupDestinationsUI();
+        markTabDirty('backup');
+        return;
+      }
+      var diskPath = document.getElementById('wizDiskPath').value.trim();
+      if (!diskPath) {
+        showModalError(BACKUP_I18N.diskPathRequired);
+        return;
+      }
+      backupDest[1] = {
+        type: 'disk',
+        diskPath: diskPath,
+        retention: existing.type ? existing.retention : { last: 0, hourly: 0, daily: 0, weekly: 0, monthly: 0, yearly: 0 },
+      };
+      closeModal();
+      renderBackupDestinationsUI();
+      markTabDirty('backup');
+    }
+
+    function atoiOrZero(v) {
+      var n = parseInt(v, 10);
+      return isNaN(n) ? 0 : n;
+    }
+
+    function removeSecondaryDestination() {
+      backupDest[1] = { type: '', diskPath: '', retention: { last: 0, hourly: 0, daily: 0, weekly: 0, monthly: 0, yearly: 0 } };
+      renderBackupDestinationsUI();
+      markTabDirty('backup');
+    }
+
+    function excludedValues(cls) {
+      return Array.from(document.querySelectorAll('.' + cls + ':not(:checked)')).map(function (cb) { return cb.value; });
+    }
+
+    function updateContentModeUI() {
+      var list = document.getElementById('scenariosCheckboxList');
+      if (!list) return;
+      var scenarioMode = document.getElementById('contentModeScenario').checked;
+      list.style.display = scenarioMode ? '' : 'none';
+    }
+
+    function saveBackupConfig() {
+      backupDest[0].type = 'snapshot';
+      var exclude = {
+        elb: !document.getElementById('includeElb').checked,
+        wine: !document.getElementById('includeWine').checked,
+        saves: excludedValues('include-saves-cb'),
+        contentMode: document.getElementById('contentModeScenario').checked ? 'scenario' : 'content',
+        mods: excludedValues('include-mods-cb'),
+        scenarios: excludedValues('include-scenarios-cb'),
+      };
+      fetch('/action/settings/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ destinations: backupDest, exclude: exclude }) })
+        .then(function (r) { return r.text(); })
+        .then(function (text) { showToastHTML(text); renderBackupDestinationsUI(); clearTabDirty('backup'); });
+    }
+  </script>
+</body>
+</html>

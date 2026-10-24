@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "nav.journal"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "journal" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content content-fill">
+        <section class="panel panel-full">
+          <h2>{{t "nav.journal"}}</h2>
+          <div id="journal-panel-inner">{{template "logs_fragment" .}}</div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script src="/static/logs.js"></script>
+  <script>
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+
+    (function () {
+      var dateInput = document.getElementById('journal-date');
+      var loadBtn = document.getElementById('journal-date-load');
+      var todayBtn = document.getElementById('journal-date-today');
+
+      function datalistIDFor(tab) {
+        if (tab === 'daemon') return 'journal-date-list-daemon';
+        if (tab === 'webui') return 'journal-date-list-webui';
+        return 'journal-date-list-server';
+      }
+
+      function journalEndpointFor(tab, date) {
+        var q = date ? '?date=' + encodeURIComponent(date) : '';
+        if (tab === 'daemon') return { url: '/action/journal/logs/daemon' + q, target: 'daemon-log-inner' };
+        if (tab === 'webui') return { url: '/action/journal/logs/webui' + q, target: 'webui-log-inner' };
+        if (tab === 'scheduler') return { url: '/action/journal/logs/scheduler' + q, target: 'scheduler-log-inner' };
+        if (tab === 'audit') return { url: '/action/journal/logs/audit' + q, target: 'audit-log-inner' };
+        return { url: '/action/journal/logs/server' + q, target: 'server-log-inner' };
+      }
+
+      window.refreshActiveLog = function () {
+        var tab = currentLogTab();
+        var ep = journalEndpointFor(tab, dateInput.value);
+        fetch(ep.url, { credentials: 'same-origin' })
+          .then(function (r) { return r.text(); })
+          .then(function (html) {
+            var el = document.getElementById(ep.target);
+            if (el) el.innerHTML = html;
+            applyLogFilters();
+          })
+          .catch(function () {});
+      };
+
+      document.querySelectorAll('.log-tab').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          dateInput.setAttribute('list', datalistIDFor(btn.dataset.tab));
+        });
+      });
+      loadBtn.addEventListener('click', refreshActiveLog);
+      todayBtn.addEventListener('click', function () { dateInput.value = ''; refreshActiveLog(); });
+    })();
+  </script>
+</body>
+</html>

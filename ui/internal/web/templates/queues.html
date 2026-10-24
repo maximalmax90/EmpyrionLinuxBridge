@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "nav.queues"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "queues" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content">
+        <section class="panel panel-full">
+          <h2>{{t "nav.queues"}} <span class="dim">({{len .Items}})</span></h2>
+
+          {{if not .Items}}
+          <p class="dim">{{t "queues.empty"}}</p>
+          {{else}}
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{t "queues.colAction"}}</th>
+                <th>{{t "queues.colTarget"}}</th>
+                <th>{{t "queues.colDetail"}}</th>
+                <th>{{t "queues.colSince"}}</th>
+                <th>{{t "queues.colWaitingFor"}}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Items}}
+              <tr>
+                <td>{{.Label}}</td>
+                <td>{{if .TargetName}}{{.TargetName}} <span class="dim">({{.Target}})</span>{{else}}{{.Target}}{{end}}</td>
+                <td class="dim">{{.Detail}}</td>
+                <td class="dim">{{dateOf .QueuedAt}} {{timeOf .QueuedAt}}</td>
+                <td class="dim">{{.WaitingFor}}</td>
+                <td>{{if .Cancelable}}<button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "queues.cancel"}}" onclick="cancelQueueItem('{{.Kind}}', {{.ID}})"></button>{{end}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+          {{end}}
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="modal-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box">
+      <h3 id="confirm-question"></h3>
+      <div class="modal-actions">
+        <button type="button" class="btn-icon nfi nfi-close" title="{{t "modal.cancel"}}" onclick="closeModal()"></button>
+        <button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "modal.confirm"}}" id="modal-confirm-btn"></button>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script>
+    var I18N = { confirmCancel: {{t "queues.confirmCancel"}} };
+
+    function openConfirmDialog(question, onConfirm) {
+      document.getElementById('confirm-question').textContent = question;
+      document.getElementById('modal-confirm-btn').onclick = function () { closeModal(); onConfirm(); };
+      document.getElementById('modal-overlay').style.display = 'flex';
+    }
+    function closeModal() {
+      document.getElementById('modal-overlay').style.display = 'none';
+    }
+
+    function cancelQueueItem(kind, id) {
+      openConfirmDialog(I18N.confirmCancel, function () {
+        fetch('/action/queues/' + kind + '/' + id + '/cancel', { method: 'POST' })
+          .then(function (r) { return r.text(); })
+          .then(function (text) { showToastHTML(text); setTimeout(function () { location.reload(); }, 600); });
+      });
+    }
+
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+  </script>
+</body>
+</html>

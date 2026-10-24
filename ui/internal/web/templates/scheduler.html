@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="{{.Locale}}" data-theme="{{.Theme}}">
+<head>
+  <meta charset="utf-8">
+  <title>ELB — {{t "scheduler.heading"}}</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/htmx-ws.js"></script>
+  <script src="/static/notifications.js"></script>
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      {{template "sidebar_nav" (dict "Page" "scheduler" "IsAdmin" .IsAdmin "Perms" .Perms "DaemonVersion" .DaemonVersion "UIVersion" .UIVersion "SysInfo" .SysInfo "ActiveMounts" .ActiveMounts "WarningPercent" .WarningPercent "CriticalPercent" .CriticalPercent "Playfields" .Playfields "DaemonUnreachable" .DaemonUnreachable)}}
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <div class="status-strip" id="status-strip-inner">{{template "statusbar_fragment" .}}</div>
+        {{template "user_menu" .}}
+      </div>
+      <div class="content">
+        <section class="panel panel-full">
+          <h2 class="logs-heading-row">
+            {{t "scheduler.heading"}}
+            <label class="toggle-switch">
+              <input type="checkbox" id="scheduler-toggle" {{if not .SchedulerPaused}}checked{{end}} onchange="onSchedulerToggle(this)">
+              <span class="toggle-slider"></span>
+              <span class="toggle-text" id="scheduler-toggle-text">{{if .SchedulerPaused}}{{t "scheduler.paused"}}{{else}}{{t "scheduler.running"}}{{end}}</span>
+            </label>
+          </h2>
+
+          <div class="task-form-topbar">
+            <button type="button" class="btn-icon btn-primary nfi nfi-plus" title="{{t "scheduler.form.addTask"}}" onclick="openNewTaskForm()"></button>
+          </div>
+
+          <table class="data-table">
+            <thead><tr>
+              <th>{{t "scheduler.col.active"}}</th>
+              <th>{{t "scheduler.col.action"}}</th>
+              <th>{{t "scheduler.col.schedule"}}</th>
+              <th>{{t "scheduler.col.nextRun"}}</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="tasks-tbody">
+              <tr id="edit-form-row" style="display:none">
+                <td colspan="5">
+                  <form id="field-form" class="task-form" onsubmit="return false">
+                    <input type="hidden" id="field-id" value="">
+
+                    <label class="js-param-action">{{t "scheduler.form.action"}}
+                      <select id="field-action" onchange="updateActionFieldsFor('field')">
+                        <option value="restart_server">{{t "scheduler.actionType.restart_server"}}</option>
+                        <option value="start_server">{{t "scheduler.actionType.start_server"}}</option>
+                        <option value="stop_server">{{t "scheduler.actionType.stop_server"}}</option>
+                        <option value="broadcast_chat">{{t "scheduler.actionType.broadcast_chat"}}</option>
+                        <option value="console_command">{{t "scheduler.actionType.console_command"}}</option>
+                        <option value="backup"{{if not .HasSecondaryDestination}} disabled title="{{t "scheduler.form.backupNeedsDestination"}}"{{end}}>{{t "scheduler.actionType.backup"}}</option>
+                        <option value="wipe_playfield" title="{{t "scheduler.actionType.wipe_playfield.hint"}}">{{t "scheduler.actionType.wipe_playfield"}}</option>
+                        <option value="reset_playfield" title="{{t "scheduler.actionType.reset_playfield.hint"}}">{{t "scheduler.actionType.reset_playfield"}}</option>
+                        <option value="wipe_old_unused_playfields">{{t "scheduler.actionType.wipe_old_unused_playfields"}}</option>
+                        <option value="banner">{{t "scheduler.actionType.banner"}}</option>
+                        <option value="run_script">{{t "scheduler.actionType.run_script"}}</option>
+                      </select>
+                    </label>
+                    {{template "task_param_fields" (dict "Prefix" "field" "Factions" .Factions "Scripts" .Scripts "WipeableSystems" .WipeableSystems "AllSystems" .AllSystems "HasSecondaryDestination" .HasSecondaryDestination)}}
+
+                    <label class="js-mode-task">{{t "scheduler.form.repeat"}}
+                      <select id="field-repeat" onchange="updateRepeatFields()">
+                        <option value="manual">{{t "scheduler.repeatType.manual"}}</option>
+                        <option value="interval">{{t "scheduler.repeatType.interval"}}</option>
+                        <option value="daily">{{t "scheduler.repeatType.daily"}}</option>
+                        <option value="weekday">{{t "scheduler.repeatType.weekday"}}</option>
+                        <option value="monthly">{{t "scheduler.repeatType.monthly"}}</option>
+                        <option value="interval_weekday">{{t "scheduler.repeatType.intervalWeekday"}}</option>
+                        <option value="interval_monthday">{{t "scheduler.repeatType.intervalMonthday"}}</option>
+                        <option value="once">{{t "scheduler.repeatType.once"}}</option>
+                      </select>
+                    </label>
+                    <label class="js-repeat-interval js-mode-task"><span>{{t "scheduler.form.intervalMinutes"}}</span><input type="number" id="field-interval" min="1" value="60"></label>
+                    <label class="js-repeat-time js-mode-task"><span>{{t "scheduler.form.repeatTime"}}</span><input type="time" id="field-time" step="1" value="00:00"></label>
+                    <label class="js-repeat-weekday js-mode-task"><span>{{t "scheduler.form.repeatWeekday"}}</span>
+                      <select id="field-weekday">
+                        <option value="1">{{t "scheduler.weekdayFull.1"}}</option>
+                        <option value="2">{{t "scheduler.weekdayFull.2"}}</option>
+                        <option value="3">{{t "scheduler.weekdayFull.3"}}</option>
+                        <option value="4">{{t "scheduler.weekdayFull.4"}}</option>
+                        <option value="5">{{t "scheduler.weekdayFull.5"}}</option>
+                        <option value="6">{{t "scheduler.weekdayFull.6"}}</option>
+                        <option value="0">{{t "scheduler.weekdayFull.0"}}</option>
+                      </select>
+                    </label>
+                    <label class="js-repeat-monthday js-mode-task"><span>{{t "scheduler.form.repeatMonthday"}}</span><input type="number" id="field-monthday" min="1" max="31" value="1"></label>
+                    <label class="js-repeat-once js-mode-task"><span>{{t "scheduler.form.repeatOnce"}}</span><input type="datetime-local" id="field-onceat" step="1"></label>
+
+                    <label class="js-mode-subtask"><span>{{t "scheduler.subtask.offset"}}</span><input type="number" id="field-offset" value="0" oninput="updateSubtaskConditionField()"></label>
+                    <label class="js-mode-subtask"><span>{{t "scheduler.subtask.condition"}}</span>
+                      <select id="field-condition">
+                        <option value="always">{{t "scheduler.subtask.always"}}</option>
+                        <option value="on_success">{{t "scheduler.subtask.onSuccess"}}</option>
+                        <option value="on_failure">{{t "scheduler.subtask.onFailure"}}</option>
+                      </select>
+                    </label>
+
+                    <label><span>&nbsp;</span><label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="field-active" checked> {{t "scheduler.col.active"}}</label></label>
+
+                    <button type="button" class="btn-icon btn-primary nfi nfi-check" title="{{t "scheduler.form.save"}}" onclick="saveEditForm()"></button>
+                    <button type="button" class="btn-icon nfi nfi-close" title="{{t "scheduler.form.cancel"}}" onclick="closeEditForm()"></button>
+                  </form>
+                </td>
+              </tr>
+            {{range .Tasks}}
+              {{$taskID := .ID}}
+              <tr data-task-row="{{.ID}}" data-repeat="{{.Repeat}}">
+                <td>{{if .Active}}<span class="nfi nfi-inline nfi-check"></span>{{else}}&#8213;{{end}}</td>
+                <td class="task-description">{{if index $.AllSubtasks $taskID}}<span class="icon-btn nfi nfi-chevron-down subtask-toggle" data-subtask-toggle="{{.ID}}" onclick="toggleSubtasks({{.ID}})" title="{{t "scheduler.subtask.toggle"}}"></span>{{end}}{{taskDescription .ActionType .Params $.PlayfieldSystems}}</td>
+                <td>{{scheduleSummary .}}</td>
+                <td>{{if .NextRun}}{{dateOf .NextRun}} {{timeOf .NextRun}}{{else}}—{{end}}</td>
+                <td>
+                  <div class="scheduler-actions">
+                  <button type="button" class="btn-icon nfi nfi-play" title="{{t "scheduler.action.run"}}" onclick="runTaskNow({{.ID}})"></button>
+                  <button type="button" class="btn-icon nfi nfi-pencil" title="{{t "scheduler.action.edit"}}" onclick="openEditTaskForm(this)"
+                    data-id="{{.ID}}" data-action="{{.ActionType}}"
+                    data-param-text="{{.Params.Text}}" data-param-command="{{.Params.Command}}"
+                    data-param-lowpriority="{{.Params.LowPriority}}" data-param-makesnapshot="{{.Params.MakeSnapshot}}"
+                    data-param-backupenabled="{{.Params.BackupEnabled}}" data-param-backupdeferred="{{.Params.BackupDeferred}}" data-param-backupdeferredtime="{{.Params.BackupDeferredTime}}"
+                    data-param-wipeplayfields="{{join .Params.WipePlayfields ","}}" data-param-wipetokens="{{join .Params.WipeTokens ","}}"
+                    data-param-channel="{{.Params.Channel}}" data-param-factionid="{{.Params.FactionID}}" data-param-recipientname="{{.Params.RecipientName}}"
+                    data-param-bannertext="{{.Params.BannerText}}" data-param-bannerpriority="{{.Params.BannerPriority}}" data-param-bannerrecipientname="{{.Params.BannerRecipientName}}"
+                    data-param-resetmode="{{.Params.ResetMode}}" data-param-resetifempty="{{.Params.ResetIfEmpty}}" data-param-resetscanalldefect="{{.Params.ResetScanAllDefect}}"
+                    data-param-days="{{.Params.Days}}" data-param-warnminutes="{{.Params.WarnMinutes}}"
+                    data-param-scriptname="{{.Params.ScriptName}}" data-param-scripttimeoutseconds="{{.Params.ScriptTimeoutSeconds}}" data-param-scriptoutputmode="{{.Params.ScriptOutputMode}}"
+                    data-repeat="{{.Repeat}}" data-interval="{{.IntervalMinutes}}" data-time="{{.TimeOfDay}}"
+                    data-weekday="{{.Weekday}}" data-monthday="{{.MonthDay}}" data-onceat="{{.OnceAt}}"
+                    data-active="{{.Active}}"></button>
+                  <button type="button" class="btn-icon"
+                    {{if or (eq .Repeat "manual") (eq .Repeat "interval") (eq .Repeat "interval_weekday") (eq .Repeat "interval_monthday")}}disabled title="{{t "scheduler.subtask.unsupportedRepeat"}}"{{else}}onclick="openNewSubtaskForm({{.ID}}, '{{.Repeat}}')" title="{{t "scheduler.action.addSubtask"}}"{{end}}
+                    >↳</button>
+                  <button type="button" class="btn-icon nfi nfi-copy" title="{{t "scheduler.action.clone"}}" onclick="cloneTask({{.ID}})"></button>
+                  <button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "scheduler.action.delete"}}" onclick="deleteTask({{.ID}})"></button>
+                  </div>
+                </td>
+              </tr>
+              {{range index $.AllSubtasks $taskID}}
+                <tr class="subtask-row" data-subtask-row="{{.ID}}" data-parent-id="{{$taskID}}">
+                  <td>{{if .Active}}<span class="nfi nfi-inline nfi-check"></span>{{else}}&#8213;{{end}}</td>
+                  <td class="task-description">↳ {{.Description}}</td>
+                  <td>—</td>
+                  <td>{{.NextRun}}</td>
+                  <td>
+                    <div class="scheduler-actions">
+                    <button type="button" class="btn-icon nfi nfi-play" title="{{t "scheduler.action.run"}}" onclick="runSubtaskNow({{.ID}}, {{$taskID}})"></button>
+                    <button type="button" class="btn-icon nfi nfi-pencil" title="{{t "scheduler.action.edit"}}" onclick="openEditSubtaskForm({{$taskID}}, {{.ID}})"></button>
+                    <button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "scheduler.action.delete"}}" onclick="deleteSubtask({{.ID}}, {{$taskID}})"></button>
+                    </div>
+                  </td>
+                </tr>
+              {{end}}
+            {{else}}
+              <tr><td colspan="5" class="empty">{{t "scheduler.empty"}}</td></tr>
+            {{end}}
+            </tbody>
+          </table>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="modal-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box">
+      <h3 id="confirm-question"></h3>
+      <div class="modal-actions">
+        <button type="button" class="btn-icon nfi nfi-close" title="{{t "modal.cancel"}}" onclick="closeModal()"></button>
+        <button type="button" class="btn-icon btn-danger nfi nfi-trash" title="{{t "modal.confirm"}}" id="modal-confirm-btn"></button>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script>
+    var I18N = {
+      confirmDeleteTask: {{t "scheduler.confirmDeleteTask"}},
+      confirmDeleteSubtask: {{t "scheduler.subtask.confirmDelete"}},
+      requestError: {{t "common.requestError"}},
+      backupNeedsDestination: {{t "scheduler.form.backupNeedsDestination"}},
+      backupNeedsSnapshot: {{t "scheduler.form.backupNeedsSnapshot"}},
+      taskCloned: {{t "scheduler.taskCloned"}},
+      confirmPauseScheduler: {{t "scheduler.confirmPause"}},
+    };
+    var WIPE_PLAYFIELDS = {{.WipeablePlayfieldsJSON}};
+    var ALL_PLAYFIELDS = {{.AllPlayfieldsJSON}};
+    var WIPE_PLAYFIELD_SYSTEM = {{.PlayfieldSystemsJSON}};
+    var ALL_SUBTASKS = {{.AllSubtasksJSON}};
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      if (localStorage.getItem('elb_sidebar_collapsed') === '1') sidebar.classList.add('collapsed');
+      document.getElementById('sidebar-toggle').addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('elb_sidebar_collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+      });
+    })();
+
+    function collapsedSubtaskIDs() {
+      try { return JSON.parse(localStorage.getItem('elb_scheduler_collapsed_subtasks') || '[]'); }
+      catch (e) { return []; }
+    }
+    function applySubtaskCollapse(taskId, collapsed) {
+      document.querySelectorAll('tr[data-parent-id="' + taskId + '"]').forEach(function (row) {
+        row.style.display = collapsed ? 'none' : '';
+      });
+      var btn = document.querySelector('[data-subtask-toggle="' + taskId + '"]');
+      if (btn) {
+        btn.classList.toggle('nfi-chevron-down', !collapsed);
+        btn.classList.toggle('nfi-chevron-right', collapsed);
+      }
+    }
+    function toggleSubtasks(taskId) {
+      var ids = collapsedSubtaskIDs();
+      var idx = ids.indexOf(taskId);
+      var collapsed = idx === -1;
+      if (collapsed) ids.push(taskId); else ids.splice(idx, 1);
+      localStorage.setItem('elb_scheduler_collapsed_subtasks', JSON.stringify(ids));
+      applySubtaskCollapse(taskId, collapsed);
+    }
+    collapsedSubtaskIDs().forEach(function (id) { applySubtaskCollapse(id, true); });
+
+
+    function val(id) { return document.getElementById(id).value; }
+    function setVal(id, v) { document.getElementById(id).value = v; }
+    function isChecked(id) { return document.getElementById(id).checked; }
+    function setChecked(id, v) { document.getElementById(id).checked = !!v; }
+
+    function toggleFieldsIn(root, selector, show) {
+      root.querySelectorAll(selector).forEach(function (el) {
+        el.style.display = show ? '' : 'none';
+        el.querySelectorAll('input,select').forEach(function (f) { f.disabled = !show; });
+      });
+    }
+
+    function updateActionFieldsFor(prefix) {
+      var root = document.getElementById(prefix + '-form');
+      var action = val(prefix + '-action');
+      toggleFieldsIn(root, '.js-param-chat', action === 'broadcast_chat');
+      toggleFieldsIn(root, '.js-param-command', action === 'console_command');
+      toggleFieldsIn(root, '.js-param-makesnapshot', action === 'restart_server' || action === 'stop_server');
+      toggleFieldsIn(root, '.js-param-wipeplayfields', action === 'wipe_playfield' || action === 'reset_playfield');
+      toggleFieldsIn(root, '.js-param-wipetokens', action === 'wipe_playfield');
+      toggleFieldsIn(root, '.js-param-resetmode', action === 'reset_playfield');
+      toggleFieldsIn(root, '.js-param-days', action === 'wipe_old_unused_playfields');
+      toggleFieldsIn(root, '.js-param-banner', action === 'banner');
+      toggleFieldsIn(root, '.js-param-script', action === 'run_script');
+      toggleFieldsIn(root, '.js-param-warnminutes', action === 'backup' || action === 'restart_server' || action === 'stop_server');
+      var offsetEl = document.getElementById(prefix + '-offset');
+      if (offsetEl) offsetEl.min = action === 'backup' ? '0' : '';
+      updateBackupFieldsFor(prefix);
+      updateChatFieldsFor(prefix);
+      updateResetModeFieldsFor(prefix);
+      updateScriptFieldsFor(prefix);
+      updateWipeSystemDatalistSourceFor(prefix);
+      updateWipePlayfieldDatalistFor(prefix);
+    }
+
+    function updateWipeSystemDatalistSourceFor(prefix) {
+      var input = document.getElementById(prefix + '-wipesystem');
+      if (!input) return;
+      var action = val(prefix + '-action');
+      var wide = action === 'wipe_playfield';
+      input.setAttribute('list', prefix + '-wipesystem-datalist' + (wide ? '-all' : ''));
+    }
+
+    function updateScriptFieldsFor(prefix) {
+      var root = document.getElementById(prefix + '-form');
+      var action = val(prefix + '-action');
+      var mode = val(prefix + '-scriptoutputmode');
+      toggleFieldsIn(root, '.js-param-bannerpriority', action === 'banner' || (action === 'run_script' && mode === 'banner'));
+    }
+
+    function updateBackupFieldsFor(prefix) {
+      var root = document.getElementById(prefix + '-form');
+      var action = val(prefix + '-action');
+      var backupCheckbox = document.getElementById(prefix + '-backupenabled');
+      var isRestartOrStop = action === 'restart_server' || action === 'stop_server';
+      if (backupCheckbox) {
+        var hasSecondary = backupCheckbox.dataset.hasSecondary === 'true';
+        var makeSnapshotOn = isChecked(prefix + '-makesnapshot');
+        var canEnable = hasSecondary && makeSnapshotOn;
+        backupCheckbox.disabled = !canEnable;
+        if (!canEnable) backupCheckbox.checked = false;
+        backupCheckbox.title = !hasSecondary ? I18N.backupNeedsDestination : (!makeSnapshotOn ? I18N.backupNeedsSnapshot : '');
+      }
+      var embedded = isRestartOrStop && isChecked(prefix + '-backupenabled');
+      toggleFieldsIn(root, '.js-param-backupsub', action === 'backup' || embedded);
+      toggleFieldsIn(root, '.js-param-backupdeferredtime', embedded && isChecked(prefix + '-backupdeferred'));
+    }
+
+    function updateChatFieldsFor(prefix) {
+      var root = document.getElementById(prefix + '-form');
+      var action = val(prefix + '-action');
+      var channel = val(prefix + '-channel');
+      toggleFieldsIn(root, '.js-param-chatfaction', action === 'broadcast_chat' && channel === 'faction');
+    }
+
+    function updateResetModeFieldsFor(prefix) {
+      var root = document.getElementById(prefix + '-form');
+      var action = val(prefix + '-action');
+      var mode = val(prefix + '-resetmode');
+      toggleFieldsIn(root, '.js-param-resetifempty', action === 'reset_playfield' && mode === 'reset');
+      toggleFieldsIn(root, '.js-param-resetscanall', action === 'reset_playfield' && mode === 'recreateDefect');
+      var scanAll = action === 'reset_playfield' && mode === 'recreateDefect' && isChecked(prefix + '-resetscanall');
+      if (scanAll) toggleFieldsIn(root, '.js-param-wipeplayfields', false);
+    }
+
+    function updateRepeatFields() {
+      var repeat = val('field-repeat');
+      toggleFieldsIn(document, '.js-repeat-interval', repeat === 'interval' || repeat === 'interval_weekday' || repeat === 'interval_monthday');
+      toggleFieldsIn(document, '.js-repeat-time', repeat === 'daily' || repeat === 'weekday' || repeat === 'monthly');
+      toggleFieldsIn(document, '.js-repeat-weekday', repeat === 'weekday' || repeat === 'interval_weekday');
+      toggleFieldsIn(document, '.js-repeat-monthday', repeat === 'monthly' || repeat === 'interval_monthday');
+      toggleFieldsIn(document, '.js-repeat-once', repeat === 'once');
+    }
+
+    var wipePlayfieldsByPrefix = { field: [] };
+
+    function playfieldPoolFor(prefix) {
+      return val(prefix + '-action') === 'wipe_playfield' ? ALL_PLAYFIELDS : WIPE_PLAYFIELDS;
+    }
+
+    function updateWipePlayfieldDatalistFor(prefix) {
+      var system = val(prefix + '-wipesystem').trim();
+      var dl = document.getElementById(prefix + '-wipeplayfield-datalist');
+      var input = document.getElementById(prefix + '-wipeplayfield-input');
+      var addBtn = document.getElementById(prefix + '-wipeplayfield-add');
+      dl.innerHTML = '';
+      var enabled = !!system;
+      if (input) input.disabled = !enabled;
+      if (addBtn) addBtn.disabled = !enabled;
+      if (!enabled) return;
+      playfieldPoolFor(prefix).forEach(function (p) {
+        if (WIPE_PLAYFIELD_SYSTEM[p] !== system) return;
+        var opt = document.createElement('option');
+        opt.value = system + '#' + p;
+        dl.appendChild(opt);
+      });
+    }
+
+    function wipePlayfieldLabel(p) {
+      var sys = WIPE_PLAYFIELD_SYSTEM[p];
+      return sys ? (sys + '#' + p) : p;
+    }
+
+    function renderWipePlayfieldChipsFor(prefix) {
+      var wrap = document.getElementById(prefix + '-wipeplayfields-chips');
+      wrap.innerHTML = '';
+      wipePlayfieldsByPrefix[prefix].forEach(function (p, i) {
+        var chip = document.createElement('span');
+        chip.className = 'chip';
+        var text = document.createElement('span');
+        text.textContent = wipePlayfieldLabel(p);
+        chip.appendChild(text);
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'chip-remove nfi nfi-close';
+        remove.onclick = function () { wipePlayfieldsByPrefix[prefix].splice(i, 1); renderWipePlayfieldChipsFor(prefix); };
+        chip.appendChild(remove);
+        wrap.appendChild(chip);
+      });
+    }
+
+    function addWipePlayfieldFor(prefix) {
+      var input = document.getElementById(prefix + '-wipeplayfield-input');
+      var system = val(prefix + '-wipesystem').trim();
+      var raw = input.value.trim();
+      if (!raw || !system) return;
+      var value = raw.indexOf('#') !== -1 ? raw.slice(raw.indexOf('#') + 1) : raw;
+      if (playfieldPoolFor(prefix).indexOf(value) === -1 || WIPE_PLAYFIELD_SYSTEM[value] !== system) return;
+      if (wipePlayfieldsByPrefix[prefix].indexOf(value) === -1) wipePlayfieldsByPrefix[prefix].push(value);
+      input.value = '';
+      renderWipePlayfieldChipsFor(prefix);
+    }
+
+    function collectWipeTokensFor(prefix) {
+      return ['terrain', 'poi', 'deposit', 'player'].filter(function (t) { return isChecked(prefix + '-wipetoken-' + t); });
+    }
+    function setWipeTokensFor(prefix, tokens) {
+      tokens = tokens || [];
+      ['terrain', 'poi', 'deposit', 'player'].forEach(function (t) { setChecked(prefix + '-wipetoken-' + t, tokens.indexOf(t) !== -1); });
+    }
+
+    function collectParamsFor(prefix) {
+      return {
+        text: val(prefix + '-param-text'),
+        command: val(prefix + '-param-command'),
+        lowPriority: isChecked(prefix + '-lowpriority'),
+        makeSnapshot: isChecked(prefix + '-makesnapshot'),
+        backupEnabled: isChecked(prefix + '-backupenabled'),
+        backupDeferred: isChecked(prefix + '-backupdeferred'),
+        backupDeferredTime: val(prefix + '-backupdeferredtime'),
+        wipePlayfields: wipePlayfieldsByPrefix[prefix].slice(),
+        wipeTokens: collectWipeTokensFor(prefix),
+        channel: val(prefix + '-channel'),
+        factionId: val(prefix + '-factionid'),
+        recipientName: val(prefix + '-recipientname'),
+        bannerText: val(prefix + '-bannertext'),
+        bannerPriority: parseInt(val(prefix + '-bannerpriority'), 10) || 0,
+        bannerRecipientName: val(prefix + '-bannerrecipient'),
+        resetMode: val(prefix + '-resetmode'),
+        resetIfEmpty: isChecked(prefix + '-resetifempty'),
+        resetScanAllDefect: isChecked(prefix + '-resetscanall'),
+        days: parseInt(val(prefix + '-days'), 10) || 0,
+        warnMinutes: parseInt(val(prefix + '-warnminutes'), 10) || 0,
+        scriptName: val(prefix + '-scriptname'),
+        scriptTimeoutSeconds: parseInt(val(prefix + '-scripttimeoutseconds'), 10) || 0,
+        scriptOutputMode: val(prefix + '-scriptoutputmode'),
+      };
+    }
+
+    function loadParamsFor(prefix, p) {
+      p = p || {};
+      setVal(prefix + '-param-text', p.text || '');
+      setVal(prefix + '-param-command', p.command || '');
+      setChecked(prefix + '-lowpriority', p.lowPriority);
+      setChecked(prefix + '-makesnapshot', p.makeSnapshot);
+      setChecked(prefix + '-backupenabled', p.backupEnabled);
+      setChecked(prefix + '-backupdeferred', p.backupDeferred);
+      setVal(prefix + '-backupdeferredtime', p.backupDeferredTime || '00:00');
+      setVal(prefix + '-wipesystem', '');
+      setVal(prefix + '-wipeplayfield-input', '');
+      wipePlayfieldsByPrefix[prefix] = (p.wipePlayfields || []).slice();
+      renderWipePlayfieldChipsFor(prefix);
+      updateWipePlayfieldDatalistFor(prefix);
+      setWipeTokensFor(prefix, p.wipeTokens);
+      setVal(prefix + '-channel', p.channel || 'global');
+      setVal(prefix + '-factionid', p.factionId || '');
+      setVal(prefix + '-recipientname', p.recipientName || '');
+      setVal(prefix + '-bannertext', p.bannerText || '');
+      setVal(prefix + '-bannerpriority', p.bannerPriority != null && p.bannerPriority !== '' ? String(p.bannerPriority) : '1');
+      setVal(prefix + '-bannerrecipient', p.bannerRecipientName || '');
+      setVal(prefix + '-resetmode', p.resetMode || 'reset');
+      setChecked(prefix + '-resetifempty', p.resetIfEmpty);
+      setChecked(prefix + '-resetscanall', p.resetScanAllDefect);
+      setVal(prefix + '-days', p.days || 14);
+      setVal(prefix + '-warnminutes', p.warnMinutes || 0);
+      setVal(prefix + '-scriptname', p.scriptName || '');
+      setVal(prefix + '-scripttimeoutseconds', p.scriptTimeoutSeconds || 15);
+      setVal(prefix + '-scriptoutputmode', p.scriptOutputMode || 'log');
+    }
+
+    function resetParamsFor(prefix) { loadParamsFor(prefix, {}); }
+
+    var formMode = null;     
+    var formTaskId = null;   
+
+    function resetFieldForm() {
+      setVal('field-id', '');
+      setVal('field-action', 'restart_server');
+      resetParamsFor('field');
+      setVal('field-repeat', 'manual');
+      setVal('field-interval', 60);
+      setVal('field-time', '00:00');
+      setVal('field-weekday', '1');
+      setVal('field-monthday', 1);
+      setVal('field-onceat', '');
+      setVal('field-offset', 0);
+      setVal('field-condition', 'always');
+      setChecked('field-active', true);
+      updateActionFieldsFor('field');
+    }
+
+    function setFormMode(mode) {
+      formMode = mode;
+      toggleFieldsIn(document, '.js-mode-task', mode === 'task');
+      toggleFieldsIn(document, '.js-mode-subtask', mode === 'subtask');
+      var backupOption = document.querySelector('#field-action option[value="backup"]');
+      if (backupOption) backupOption.hidden = mode === 'subtask';
+      if (mode === 'task') updateRepeatFields(); else updateSubtaskConditionField();
+    }
+
+    function placeFormRow(afterRow) {
+      var row = document.getElementById('edit-form-row');
+      if (afterRow) {
+        afterRow.insertAdjacentElement('afterend', row);
+      } else {
+        document.getElementById('tasks-tbody').insertBefore(row, document.getElementById('tasks-tbody').firstChild);
+      }
+      row.style.display = '';
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function closeEditForm() {
+      document.getElementById('edit-form-row').style.display = 'none';
+      formMode = null;
+      formTaskId = null;
+    }
+
+    function openNewTaskForm() {
+      resetFieldForm();
+      setFormMode('task');
+      formTaskId = null;
+      placeFormRow(null);
+    }
+
+    function openEditTaskForm(btn) {
+      var d = btn.dataset;
+      resetFieldForm();
+      setFormMode('task');
+      formTaskId = null;
+      setVal('field-id', d.id);
+      setVal('field-action', d.action);
+      loadParamsFor('field', {
+        text: d.paramText, command: d.paramCommand,
+        lowPriority: d.paramLowpriority === 'true', makeSnapshot: d.paramMakesnapshot === 'true',
+        backupEnabled: d.paramBackupenabled === 'true', backupDeferred: d.paramBackupdeferred === 'true', backupDeferredTime: d.paramBackupdeferredtime,
+        wipePlayfields: (d.paramWipeplayfields || '').split(',').filter(Boolean),
+        wipeTokens: (d.paramWipetokens || '').split(',').filter(Boolean),
+        channel: d.paramChannel, factionId: d.paramFactionid, recipientName: d.paramRecipientname,
+        bannerText: d.paramBannertext, bannerPriority: d.paramBannerpriority, bannerRecipientName: d.paramBannerrecipientname,
+        resetMode: d.paramResetmode, resetIfEmpty: d.paramResetifempty === 'true', resetScanAllDefect: d.paramResetscanalldefect === 'true',
+        days: parseInt(d.paramDays, 10) || 14,
+        warnMinutes: parseInt(d.paramWarnminutes, 10) || 0,
+        scriptName: d.paramScriptname,
+        scriptTimeoutSeconds: parseInt(d.paramScripttimeoutseconds, 10) || 15,
+        scriptOutputMode: d.paramScriptoutputmode,
+      });
+      setVal('field-repeat', d.repeat);
+      setVal('field-interval', d.interval || 60);
+      setVal('field-time', d.time || '00:00');
+      setVal('field-weekday', d.weekday || '0');
+      setVal('field-monthday', d.monthday || 1);
+      if (d.onceat) {
+        var dt = new Date(d.onceat);
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        setVal('field-onceat', dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate()) + 'T' + pad(dt.getHours()) + ':' + pad(dt.getMinutes()) + ':' + pad(dt.getSeconds()));
+      } else {
+        setVal('field-onceat', '');
+      }
+      setChecked('field-active', d.active === 'true');
+      updateActionFieldsFor('field');
+      updateRepeatFields();
+      placeFormRow(document.querySelector('tr[data-task-row="' + d.id + '"]'));
+    }
+
+    function openNewSubtaskForm(taskId, parentRepeat) {
+      if (parentRepeat === 'manual' || parentRepeat === 'interval' || parentRepeat === 'interval_weekday' || parentRepeat === 'interval_monthday') return;
+      resetFieldForm();
+      setFormMode('subtask');
+      formTaskId = taskId;
+      placeFormRow(findLastRowOfTask(taskId));
+    }
+
+    function findLastRowOfTask(taskId) {
+      var row = document.querySelector('tr[data-task-row="' + taskId + '"]');
+      var next = row.nextElementSibling;
+      while (next && next.classList.contains('subtask-row') && next.dataset.parentId === String(taskId)) {
+        row = next;
+        next = next.nextElementSibling;
+      }
+      return row;
+    }
+
+    function openEditSubtaskForm(taskId, subtaskId) {
+      var subtasks = ALL_SUBTASKS[taskId] || [];
+      var st = null;
+      for (var i = 0; i < subtasks.length; i++) {
+        if (subtasks[i].id === subtaskId) { st = subtasks[i]; break; }
+      }
+      if (!st) return;
+      resetFieldForm();
+      setFormMode('subtask');
+      formTaskId = taskId;
+      setVal('field-id', st.id);
+      setVal('field-action', st.actionType);
+      loadParamsFor('field', st.params);
+      setVal('field-offset', st.offsetMinutes);
+      setVal('field-condition', st.runCondition || 'always');
+      setChecked('field-active', st.active);
+      updateActionFieldsFor('field');
+      updateSubtaskConditionField();
+      placeFormRow(document.querySelector('tr[data-subtask-row="' + subtaskId + '"]'));
+    }
+
+    function updateSubtaskConditionField() {
+      var offset = parseInt(val('field-offset'), 10) || 0;
+      var sel = document.getElementById('field-condition');
+      if (offset < 0) {
+        sel.value = 'always';
+        sel.disabled = true;
+      } else {
+        sel.disabled = false;
+      }
+    }
+
+    function collectTaskPayload() {
+      var onceAt = '';
+      var onceEl = document.getElementById('field-onceat');
+      if (onceEl.value) onceAt = new Date(onceEl.value).toISOString();
+      return {
+        active: isChecked('field-active'),
+        actionType: val('field-action'),
+        params: collectParamsFor('field'),
+        repeat: val('field-repeat'),
+        intervalMinutes: parseInt(val('field-interval'), 10) || 0,
+        timeOfDay: val('field-time'),
+        weekday: parseInt(val('field-weekday'), 10) || 0,
+        monthDay: parseInt(val('field-monthday'), 10) || 0,
+        onceAt: onceAt,
+      };
+    }
+
+    function collectSubtaskPayload() {
+      return {
+        taskId: formTaskId,
+        active: isChecked('field-active'),
+        actionType: val('field-action'),
+        params: collectParamsFor('field'),
+        offsetMinutes: parseInt(val('field-offset'), 10) || 0,
+        runCondition: val('field-condition'),
+      };
+    }
+
+    function afterAction(promise, redirect) {
+      promise
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          showToastHTML(html);
+          setTimeout(function () {
+            if (redirect && redirect.editTask) { location.href = location.pathname + '?editTask=' + redirect.editTask; }
+            else if (redirect && redirect.addSubtask) { location.href = location.pathname + '?addSubtask=' + redirect.addSubtask; }
+            else { location.reload(); }
+          }, 600);
+        })
+        .catch(function () { showToastHTML(I18N.requestError); });
+    }
+
+    function saveEditForm() {
+      var id = val('field-id');
+      if (formMode === 'task') {
+        var taskBody = JSON.stringify(collectTaskPayload());
+        if (id) {
+          afterAction(fetch('/action/scheduler/tasks/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: taskBody }), { editTask: id });
+        } else {
+          afterAction(fetch('/action/scheduler/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: taskBody }));
+        }
+      } else {
+        var subtaskBody = JSON.stringify(collectSubtaskPayload());
+        if (id) {
+          afterAction(fetch('/action/scheduler/subtasks/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: subtaskBody }), { editTask: formTaskId });
+        } else {
+          afterAction(fetch('/action/scheduler/tasks/' + formTaskId + '/subtasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: subtaskBody }), { addSubtask: formTaskId });
+        }
+      }
+    }
+
+    function openConfirmDialog(question, onConfirm, confirmClass) {
+      document.getElementById('confirm-question').textContent = question;
+      var btn = document.getElementById('modal-confirm-btn');
+      btn.className = 'btn-icon nfi ' + (confirmClass || 'btn-danger nfi-trash');
+      btn.onclick = function () { closeModal(); onConfirm(); };
+      document.getElementById('modal-overlay').style.display = 'flex';
+    }
+    function closeModal() {
+      document.getElementById('modal-overlay').style.display = 'none';
+    }
+
+    function deleteTask(id) {
+      openConfirmDialog(I18N.confirmDeleteTask, function () {
+        afterAction(fetch('/action/scheduler/tasks/' + id, { method: 'DELETE' }));
+      });
+    }
+
+    function runTaskNow(id) {
+      afterAction(fetch('/action/scheduler/tasks/' + id + '/run', { method: 'POST' }));
+    }
+
+    function onSchedulerToggle(el) {
+      if (el.checked) {
+        setSchedulerPaused(false);
+        return;
+      }
+      el.checked = true;
+      openConfirmDialog(I18N.confirmPauseScheduler, function () {
+        setSchedulerPaused(true);
+      }, 'nfi-check');
+    }
+    function setSchedulerPaused(paused) {
+      afterAction(fetch('/action/scheduler/enabled', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused: paused })
+      }));
+    }
+
+    function cloneTask(id) {
+      fetch('/action/scheduler/tasks/' + id + '/clone', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          showToastHTML(I18N.taskCloned);
+          setTimeout(function () { location.href = location.pathname + '?editTask=' + data.id; }, 400);
+        })
+        .catch(function () { showToastHTML(I18N.requestError); });
+    }
+
+    function deleteSubtask(id, taskId) {
+      openConfirmDialog(I18N.confirmDeleteSubtask, function () {
+        afterAction(fetch('/action/scheduler/subtasks/' + id, { method: 'DELETE' }), { editTask: taskId });
+      });
+    }
+
+    function runSubtaskNow(id, taskId) {
+      afterAction(fetch('/action/scheduler/subtasks/' + id + '/run', { method: 'POST' }), { editTask: taskId });
+    }
+
+    resetFieldForm();
+    setFormMode('task');
+
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var editId = params.get('editTask');
+      var addSubtaskId = params.get('addSubtask');
+      if (editId) {
+        var btn = document.querySelector('button.btn-small[data-id="' + editId + '"][data-action]');
+        if (btn) openEditTaskForm(btn);
+      } else if (addSubtaskId) {
+        var taskRow = document.querySelector('tr[data-task-row="' + addSubtaskId + '"]');
+        if (taskRow) openNewSubtaskForm(parseInt(addSubtaskId, 10), taskRow.dataset.repeat);
+      }
+    })();
+  </script>
+</body>
+</html>
+
+{{define "task_param_fields"}}
+  <label class="js-param-chat"><span>{{t "scheduler.form.paramText"}}</span><input type="text" class="task-form-wide-text" id="{{.Prefix}}-param-text"></label>
+  <label class="js-param-chat"><span>{{t "scheduler.form.channel"}}</span>
+    <select id="{{.Prefix}}-channel" onchange="updateChatFieldsFor('{{.Prefix}}')">
+      <option value="global">{{t "channel.global"}}</option>
+      <option value="faction">{{t "channel.faction"}}</option>
+      <option value="alliance">{{t "channel.alliance"}}</option>
+    </select>
+  </label>
+  <label class="js-param-chatfaction"><span>{{t "scheduler.form.faction"}}</span>
+    <select id="{{.Prefix}}-factionid">
+      <option value="">{{t "scheduler.form.factionPlaceholder"}}</option>
+      {{range .Factions}}<option value="{{.ID}}:{{.Abbreviation}}">{{.Abbreviation}} — {{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label class="js-param-chat"><span>{{t "scheduler.form.recipientName"}}</span><input type="text" id="{{.Prefix}}-recipientname" title="{{t "scheduler.form.recipientNamePlaceholder"}}"></label>
+
+  <label class="js-param-command"><span>{{t "scheduler.form.paramCommand"}}</span><input type="text" id="{{.Prefix}}-param-command" title="{{t "scheduler.form.paramCommandPlaceholder"}}"></label>
+
+  <label class="js-param-makesnapshot"><span>&nbsp;</span><label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="{{.Prefix}}-makesnapshot" onchange="updateBackupFieldsFor('{{.Prefix}}')"> {{t "scheduler.form.makeSnapshot"}}</label></label>
+
+  <label class="js-param-makesnapshot"><span>&nbsp;</span><label style="flex-direction:row;align-items:center;gap:4px">
+    <input type="checkbox" id="{{.Prefix}}-backupenabled" data-has-secondary="{{.HasSecondaryDestination}}"
+      {{if not .HasSecondaryDestination}}disabled{{end}} onchange="updateBackupFieldsFor('{{.Prefix}}')"> {{t "scheduler.form.backupEnabled"}}</label></label>
+
+  <fieldset class="player-group task-group-compact js-param-backupsub">
+    <div class="task-form">
+      <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="{{.Prefix}}-lowpriority"> {{t "scheduler.form.lowPriority"}}</label>
+      <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="{{.Prefix}}-backupdeferred" onchange="updateBackupFieldsFor('{{.Prefix}}')"> {{t "scheduler.form.backupDeferred"}}</label>
+      <label class="js-param-backupdeferredtime"><span>{{t "scheduler.form.backupDeferredTime"}}</span><input type="time" id="{{.Prefix}}-backupdeferredtime" value="00:00"></label>
+    </div>
+  </fieldset>
+
+
+  <label class="js-param-wipeplayfields"><span>{{t "scheduler.form.wipeSystem"}}</span>
+    <input type="text" id="{{.Prefix}}-wipesystem" list="{{.Prefix}}-wipesystem-datalist" title="{{t "scheduler.form.wipeSystemPlaceholder"}}" oninput="updateWipePlayfieldDatalistFor('{{.Prefix}}')">
+    <datalist id="{{.Prefix}}-wipesystem-datalist">{{range .WipeableSystems}}<option value="{{.}}">{{end}}</datalist>
+    <datalist id="{{.Prefix}}-wipesystem-datalist-all">{{range .AllSystems}}<option value="{{.}}">{{end}}</datalist>
+  </label>
+  <label class="js-param-wipeplayfields"><span>{{t "scheduler.form.wipePlayfields"}}</span>
+    <span style="flex-direction:row;display:flex;gap:6px;align-items:center">
+      <input type="text" id="{{.Prefix}}-wipeplayfield-input" list="{{.Prefix}}-wipeplayfield-datalist" title="{{t "scheduler.form.wipePlayfieldPlaceholder"}}">
+      <datalist id="{{.Prefix}}-wipeplayfield-datalist"></datalist>
+      <button type="button" id="{{.Prefix}}-wipeplayfield-add" class="btn-icon nfi nfi-plus" title="{{t "common.add"}}" onclick="addWipePlayfieldFor('{{.Prefix}}')"></button>
+    </span>
+  </label>
+  <label class="js-param-wipetokens"><span>{{t "scheduler.form.wipeTokens"}}</span>
+    <span style="flex-direction:row;display:flex;gap:10px;align-items:center">
+      <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="{{.Prefix}}-wipetoken-terrain"> {{t "scheduler.wipeToken.terrain"}}</label>
+      <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="{{.Prefix}}-wipetoken-poi"> {{t "scheduler.wipeToken.poi"}}</label>
+      <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="{{.Prefix}}-wipetoken-deposit"> {{t "scheduler.wipeToken.deposit"}}</label>
+      <label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="{{.Prefix}}-wipetoken-player"> {{t "scheduler.wipeToken.player"}}</label>
+    </span>
+  </label>
+
+  <label class="js-param-resetmode"><span>{{t "scheduler.form.resetMode"}}</span>
+    <select id="{{.Prefix}}-resetmode" onchange="updateResetModeFieldsFor('{{.Prefix}}')">
+      <option value="reset">{{t "scheduler.resetMode.reset"}}</option>
+      <option value="recreate">{{t "scheduler.resetMode.recreate"}}</option>
+      <option value="recreateDefect">{{t "scheduler.resetMode.recreateDefect"}}</option>
+    </select>
+  </label>
+  <label class="js-param-resetifempty"><span>&nbsp;</span><label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="{{.Prefix}}-resetifempty"> {{t "scheduler.form.resetIfEmpty"}}</label></label>
+  <label class="js-param-resetscanall"><span>&nbsp;</span><label style="flex-direction:row;align-items:center;gap:4px"><input type="checkbox" id="{{.Prefix}}-resetscanall" onchange="updateResetModeFieldsFor('{{.Prefix}}')"> {{t "scheduler.form.resetScanAllDefect"}}</label></label>
+
+  <div class="js-param-wipeplayfields wipefields-cards-block">
+    <div class="chip-list wipefields-chip-list" id="{{.Prefix}}-wipeplayfields-chips"></div>
+  </div>
+
+  <label class="js-param-days"><span>{{t "scheduler.form.days"}}</span><input type="number" id="{{.Prefix}}-days" min="1" value="14"></label>
+
+  <label class="js-param-warnminutes"><span>{{t "scheduler.form.warnMinutes"}}</span><input type="number" id="{{.Prefix}}-warnminutes" min="0" value="0" title="{{t "scheduler.form.warnMinutesPlaceholder"}}"></label>
+
+  <label class="js-param-banner"><span>{{t "scheduler.form.bannerText"}}</span><input type="text" class="task-form-wide-text" id="{{.Prefix}}-bannertext"></label>
+  <label class="js-param-banner js-param-bannerpriority"><span>{{t "scheduler.form.bannerPriority"}}</span>
+    <select id="{{.Prefix}}-bannerpriority">
+      <option value="0">{{t "scheduler.form.bannerPriority.alarm"}}</option>
+      <option value="1">{{t "scheduler.form.bannerPriority.message"}}</option>
+      <option value="2">{{t "scheduler.form.bannerPriority.info"}}</option>
+    </select>
+  </label>
+  <label class="js-param-banner"><span>{{t "scheduler.form.bannerRecipient"}}</span><input type="text" id="{{.Prefix}}-bannerrecipient" title="{{t "scheduler.form.bannerRecipientPlaceholder"}}"></label>
+
+  <label class="js-param-script"><span>{{t "scheduler.form.script"}}</span>
+    <select id="{{.Prefix}}-scriptname">
+      <option value="">{{t "settings.chatbot.custom.script.none"}}</option>
+      {{range .Scripts}}<option value="{{.}}">{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label class="js-param-script"><span>{{t "scheduler.form.scriptTimeout"}}</span><input type="number" id="{{.Prefix}}-scripttimeoutseconds" min="1" value="15"></label>
+  <label class="js-param-script"><span>{{t "scheduler.form.scriptOutputMode"}}</span>
+    <select id="{{.Prefix}}-scriptoutputmode" onchange="updateScriptFieldsFor('{{.Prefix}}')">
+      <option value="log">{{t "scheduler.form.scriptOutputMode.log"}}</option>
+      <option value="banner">{{t "scheduler.form.scriptOutputMode.banner"}}</option>
+      <option value="chat">{{t "scheduler.form.scriptOutputMode.chat"}}</option>
+    </select>
+  </label>
+{{end}}

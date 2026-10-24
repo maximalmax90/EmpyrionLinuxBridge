@@ -1,0 +1,16 @@
+[Unit]
+Description=ELB daemon
+After=network.target
+
+[Service]
+Environment=ELB_HTTP_ADDR=__HTTP_ADDR__
+Environment=ELB_DEDICATED_YAML=__DEDICATED_YAML__
+Environment=ELB_DATA_ROOT=__DATA_ROOT__
+Environment=ELB_BACKUPS_DIR=__BACKUPS_DIR__
+Environment=ELB_STEAMCMD_BIN=__STEAMCMD_BIN__
+ExecStart=/usr/local/bin/elb-daemon
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target
