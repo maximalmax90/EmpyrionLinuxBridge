@@ -38,7 +38,7 @@ func TestIsTransientNetworkError(t *testing.T) {
 func TestWithNetworkRetry_RetriesOnlyTransientErrors(t *testing.T) {
 	t.Run("транзиентная ошибка — ретраит и в итоге успех", func(t *testing.T) {
 		calls := 0
-		err := withNetworkRetry(5, time.Millisecond, func() error {
+		err := withNetworkRetry(time.Second, time.Millisecond, func() error {
 			calls++
 			if calls < 3 {
 				return errors.New("connect: network is unreachable")
@@ -55,7 +55,7 @@ func TestWithNetworkRetry_RetriesOnlyTransientErrors(t *testing.T) {
 
 	t.Run("нетранзиентная ошибка — ни одного повтора", func(t *testing.T) {
 		calls := 0
-		err := withNetworkRetry(5, time.Millisecond, func() error {
+		err := withNetworkRetry(time.Second, time.Millisecond, func() error {
 			calls++
 			return errors.New("connect: connection refused")
 		})
@@ -67,17 +67,21 @@ func TestWithNetworkRetry_RetriesOnlyTransientErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("транзиентная ошибка не проходит — возвращает её после всех попыток", func(t *testing.T) {
+	t.Run("транзиентная ошибка не проходит — сдаётся по дедлайну", func(t *testing.T) {
 		calls := 0
-		err := withNetworkRetry(3, time.Millisecond, func() error {
+		start := time.Now()
+		err := withNetworkRetry(50*time.Millisecond, 10*time.Millisecond, func() error {
 			calls++
 			return errors.New("connect: network is unreachable")
 		})
 		if err == nil {
-			t.Fatal("expected error after exhausting retries")
+			t.Fatal("expected error after deadline")
 		}
-		if calls != 3 {
-			t.Fatalf("got %d calls, want 3 (attempts exhausted)", calls)
+		if calls < 2 {
+			t.Fatalf("got %d calls, want several retries before deadline", calls)
+		}
+		if elapsed := time.Since(start); elapsed > time.Second {
+			t.Fatalf("took %v, deadline not respected", elapsed)
 		}
 	})
 }

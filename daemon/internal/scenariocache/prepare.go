@@ -36,18 +36,20 @@ func isTransientNetworkError(err error) bool {
 	return false
 }
 
-func withNetworkRetry(attempts int, delay time.Duration, fn func() error) error {
-	var err error
-	for i := 0; i < attempts; i++ {
-		err = fn()
+const networkWaitMax = 45 * time.Second
+
+func withNetworkRetry(maxWait, delay time.Duration, fn func() error) error {
+	deadline := time.Now().Add(maxWait)
+	for {
+		err := fn()
 		if err == nil || !isTransientNetworkError(err) {
 			return err
 		}
-		if i < attempts-1 {
-			time.Sleep(delay)
+		if time.Now().Add(delay).After(deadline) {
+			return err
 		}
+		time.Sleep(delay)
 	}
-	return err
 }
 
 const ZipName = "sharedData.zip"
@@ -185,7 +187,7 @@ func Prepare(cfg config.Config, set settings.ScenarioCache) {
 			fallback(cfg, serr)
 			return
 		}
-		if perr := withNetworkRetry(6, 2*time.Second, func() error {
+		if perr := withNetworkRetry(networkWaitMax, 2*time.Second, func() error {
 			return store.Put(destZip, ZipName, 0)
 		}); perr != nil {
 			fallback(cfg, perr)
@@ -195,7 +197,7 @@ func Prepare(cfg config.Config, set settings.ScenarioCache) {
 
 	writeStatus(cfg, PhaseVerifying, "")
 	url := ComputeURL(set.PublicURLBase, fp)
-	if verr := withNetworkRetry(6, 2*time.Second, func() error {
+	if verr := withNetworkRetry(networkWaitMax, 2*time.Second, func() error {
 		return verifyDownloadable(url, info.Size())
 	}); verr != nil {
 		fallback(cfg, verr)
