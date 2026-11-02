@@ -37,6 +37,7 @@ var HISTORY_COLUMNS = [
   { key: 'kills', i18n: 'historyColKills', numeric: true },
   { key: 'died', i18n: 'historyColDied', numeric: true },
   { key: 'exp', i18n: 'historyColExp', numeric: true },
+  { key: 'upgrade', i18n: 'historyColUpgrade', numeric: true },
   { key: 'factionId', i18n: 'historyColFactionId', numeric: false },
   { key: 'factionGroup', i18n: 'historyColFactionGroup', numeric: false },
   { key: 'cntBlocks', i18n: 'historyColBlocks', numeric: true },

@@ -51,11 +51,13 @@ type Audit struct {
 	PermissionFactionChange bool `json:"permissionFactionChange,omitempty"`
 
 	LoginTracking bool `json:"loginTracking,omitempty"`
+
+	ProgressJump bool `json:"progressJump,omitempty"`
 }
 
 func (a Audit) Enabled() bool {
 	return a.UnauthorizedAPIRequests || a.InventoryFuelAnomaly || a.WipeLeftover ||
-		a.PositionJump || a.PermissionFactionChange || a.LoginTracking
+		a.PositionJump || a.PermissionFactionChange || a.LoginTracking || a.ProgressJump
 }
 
 type Structures struct {

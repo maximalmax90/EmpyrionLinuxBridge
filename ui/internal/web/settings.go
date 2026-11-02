@@ -274,6 +274,7 @@ func (s *Server) handleActionSettingsPanel(w http.ResponseWriter, r *http.Reques
 		PositionJump:            r.FormValue("auditPositionJump") == "on",
 		PermissionFactionChange: r.FormValue("auditPermissionFactionChange") == "on",
 		LoginTracking:           r.FormValue("auditLoginTracking") == "on",
+		ProgressJump:            r.FormValue("auditProgressJump") == "on",
 	}
 
 	if u := userFromCtx(r); !u.IsAdmin() {

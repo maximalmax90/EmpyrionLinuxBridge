@@ -1829,6 +1829,7 @@ type AuditSettings struct {
 	PositionJump            bool `json:"positionJump,omitempty"`
 	PermissionFactionChange bool `json:"permissionFactionChange,omitempty"`
 	LoginTracking           bool `json:"loginTracking,omitempty"`
+	ProgressJump            bool `json:"progressJump,omitempty"`
 }
 
 type SteamSettings struct {
@@ -2147,6 +2148,7 @@ func (c *Client) SetPanelBehaviorConfig(watchdog WatchdogSettings, backpack Back
 			"positionJump":            audit.PositionJump,
 			"permissionFactionChange": audit.PermissionFactionChange,
 			"loginTracking":           audit.LoginTracking,
+			"progressJump":            audit.ProgressJump,
 		},
 	}
 	_, err := c.do(http.MethodPost, "/api/config", body)

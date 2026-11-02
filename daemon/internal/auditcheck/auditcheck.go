@@ -23,6 +23,12 @@ const (
 	maxWalkSpeedMps = 10000.0
 
 	maxFuelPercent = 100.0
+
+	maxExpPerMinute = 40000.0
+
+	maxUpgradeJump = 200
+
+	adminEditGrace = 2 * time.Minute
 )
 
 type lastSeen struct {
@@ -37,9 +43,16 @@ func dist(a, b Vec3Pos) float64 {
 	return math.Sqrt(dx*dx + dy*dy + dz*dz)
 }
 
+type progressSample struct {
+	exp, upgrade int
+	at           time.Time
+}
+
 var (
 	mu            sync.Mutex
 	lastPos       = map[string]lastSeen{}
+	lastProgress  = map[string]progressSample{}
+	adminEditAt   = map[string]time.Time{}
 	flaggedFuel   = map[int]bool{}
 	flaggedStacks = map[string]int{}
 )
@@ -61,7 +74,7 @@ func PollOnce(cfg config.Config, mod *modclient.Client) error {
 	if err != nil {
 		return fmt.Errorf("load settings: %w", err)
 	}
-	if !s.Audit.PositionJump && !s.Audit.InventoryFuelAnomaly {
+	if !s.Audit.PositionJump && !s.Audit.InventoryFuelAnomaly && !s.Audit.ProgressJump {
 		return nil
 	}
 
@@ -78,7 +91,68 @@ func PollOnce(cfg config.Config, mod *modclient.Client) error {
 		checkFuelAnomalies(cfg, mod)
 		checkStackAnomalies(cfg, mod, players)
 	}
+	if s.Audit.ProgressJump {
+		checkProgressJumps(cfg, players)
+	}
 	return nil
+}
+
+func NoteAdminEdit(steamID string) {
+	mu.Lock()
+	adminEditAt[steamID] = time.Now()
+	mu.Unlock()
+}
+
+func checkProgressJumps(cfg config.Config, players []modclient.Player) {
+	now := time.Now()
+	mu.Lock()
+	defer mu.Unlock()
+	online := map[string]bool{}
+	for _, p := range players {
+		if !p.Online || p.Info == nil || p.SteamId == "" {
+			continue
+		}
+		online[p.SteamId] = true
+		cur := progressSample{exp: p.Info.Exp, upgrade: p.Info.Upgrade, at: now}
+		prev, ok := lastProgress[p.SteamId]
+		lastProgress[p.SteamId] = cur
+		if !ok {
+			continue
+		}
+		if t, edited := adminEditAt[p.SteamId]; edited {
+			if now.Sub(t) < adminEditGrace {
+				continue
+			}
+			delete(adminEditAt, p.SteamId)
+		}
+		for _, summary := range progressFindings(p.Name, prev, cur) {
+			if err := audit.Record(cfg, audit.CategoryProgressJump, p.SteamId, summary, ""); err != nil {
+				log.Printf("audit: progress jump: %v", err)
+			}
+		}
+	}
+	for id := range lastProgress {
+		if !online[id] {
+			delete(lastProgress, id)
+		}
+	}
+}
+
+func progressFindings(name string, prev, cur progressSample) []string {
+	var out []string
+	dt := cur.at.Sub(prev.at)
+	if dt < pollInterval {
+		dt = pollInterval
+	}
+	if d := cur.exp - prev.exp; d > 0 {
+		if rate := float64(d) / dt.Minutes(); rate > maxExpPerMinute {
+			out = append(out, fmt.Sprintf("sudden exp gain for %s: +%d in %.0fs (%d -> %d, %.0f/min)", name, d, cur.at.Sub(prev.at).Seconds(), prev.exp, cur.exp, rate))
+		}
+	}
+	if d := cur.upgrade - prev.upgrade; d > maxUpgradeJump {
+		out = append(out, fmt.Sprintf("sudden upgrade points gain for %s: +%d (%d -> %d)", name, d, prev.upgrade, cur.upgrade))
+	}
+	return out
 }
 
 func checkPositionJumps(cfg config.Config, players []modclient.Player) {

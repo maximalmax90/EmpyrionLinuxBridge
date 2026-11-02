@@ -64,10 +64,13 @@ type playerSnap struct {
 	Playfield string
 	Pos       vec3
 
-	Online       bool
-	Kills        int
-	Died         int
-	Exp          int
+	Online  bool
+	Kills   int
+	Died    int
+	Exp     int
+	Upgrade int
+
+	UpgradeKnown bool
 	Credits      float64
 	FactionID    int
 	FactionGroup int
@@ -256,6 +259,12 @@ func applyPlayerChanged(snap *playerSnap, changedRaw string) {
 			snap.Exp = int(f)
 		}
 	}
+	if v, ok := changed["upgrade"]; ok {
+		if f, ok2 := v.New.(float64); ok2 {
+			snap.Upgrade = int(f)
+			snap.UpgradeKnown = true
+		}
+	}
 	if v, ok := changed["credits"]; ok {
 		if f, ok2 := v.New.(float64); ok2 {
 			snap.Credits = f
@@ -365,6 +374,8 @@ func Tick(cfg config.Config, mod *modclient.Client) error {
 			snap.Kills = p.Info.Kills
 			snap.Died = p.Info.Died
 			snap.Exp = p.Info.Exp
+			snap.Upgrade = p.Info.Upgrade
+			snap.UpgradeKnown = true
 			snap.Credits = p.Info.Credits
 			snap.FactionID = p.Info.FactionId
 			snap.FactionGroup = p.Info.FactionGroup
@@ -375,7 +386,8 @@ func Tick(cfg config.Config, mod *modclient.Client) error {
 			if off.Died != nil {
 				snap.Died = *off.Died
 			}
-			if off.Exp != nil {
+
+			if off.Exp != nil && snap.Exp == 0 {
 				snap.Exp = *off.Exp
 			}
 			if off.Credits != nil {
@@ -478,6 +490,9 @@ func diffPlayer(a, b playerSnap) map[string]changedField {
 	}
 	if a.Exp != b.Exp {
 		out["exp"] = changedField{a.Exp, b.Exp}
+	}
+	if a.UpgradeKnown && a.Upgrade != b.Upgrade {
+		out["upgrade"] = changedField{a.Upgrade, b.Upgrade}
 	}
 	if a.Credits != b.Credits {
 		out["credits"] = changedField{a.Credits, b.Credits}

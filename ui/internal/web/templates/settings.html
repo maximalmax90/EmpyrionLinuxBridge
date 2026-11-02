@@ -495,6 +495,7 @@
                 <label title="{{t "settings.panel.auditPositionJumpHint"}}"><input type="checkbox" id="auditPositionJump" {{if $audit.PositionJump}}checked{{end}}> {{t "settings.panel.auditPositionJump"}}</label>
                 <label title="{{t "settings.panel.auditPermissionFactionChangeHint"}}"><input type="checkbox" id="auditPermissionFactionChange" {{if $audit.PermissionFactionChange}}checked{{end}}> {{t "settings.panel.auditPermissionFactionChange"}}</label>
                 <label title="{{t "settings.panel.auditLoginTrackingHint"}}"><input type="checkbox" id="auditLoginTracking" {{if $audit.LoginTracking}}checked{{end}}> {{t "settings.panel.auditLoginTracking"}}</label>
+                <label title="{{t "settings.panel.auditProgressJumpHint"}}"><input type="checkbox" id="auditProgressJump" {{if $audit.ProgressJump}}checked{{end}}> {{t "settings.panel.auditProgressJump"}}</label>
               </div>
             </fieldset>
             {{end}}
@@ -1469,6 +1470,7 @@
       setCheckedIfExists(params, 'auditPositionJump', 'auditPositionJump');
       setCheckedIfExists(params, 'auditPermissionFactionChange', 'auditPermissionFactionChange');
       setCheckedIfExists(params, 'auditLoginTracking', 'auditLoginTracking');
+      setCheckedIfExists(params, 'auditProgressJump', 'auditProgressJump');
       setValueIfExists(params, 'monitoringRetentionDays', 'monitoringRetentionDays');
       colIds.forEach(function (id) { setCheckedIfExists(params, id, id); });
       document.querySelectorAll('.mount-checkbox:checked').forEach(function (cb) { params.append('enabledMounts', cb.value); });

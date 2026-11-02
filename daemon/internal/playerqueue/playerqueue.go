@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"elb/daemon/internal/auditcheck"
 	"elb/daemon/internal/config"
 	"elb/daemon/internal/modclient"
 	"elb/daemon/internal/notify"
@@ -278,8 +279,13 @@ func applyForPlayer(cfg config.Config, mod *modclient.Client, db *sql.DB, steamI
 			if aerr != nil {
 				return fmt.Errorf("%s (request %d): %w", e.modPath, e.id, aerr)
 			}
-		} else if _, err := mod.Post(e.modPath, json.RawMessage(e.payload)); err != nil {
-			return fmt.Errorf("%s (request %d): %w", e.modPath, e.id, err)
+		} else {
+			if e.modPath == "/players/setinfo" {
+				auditcheck.NoteAdminEdit(steamID)
+			}
+			if _, err := mod.Post(e.modPath, json.RawMessage(e.payload)); err != nil {
+				return fmt.Errorf("%s (request %d): %w", e.modPath, e.id, err)
+			}
 		}
 		if _, err := db.Exec(`DELETE FROM pending_edits WHERE id = ?`, e.id); err != nil {
 			return fmt.Errorf("delete request %d: %w", e.id, err)

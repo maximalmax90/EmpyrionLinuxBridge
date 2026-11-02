@@ -146,6 +146,7 @@ func registerConfigRoutes(mux *http.ServeMux, cfg config.Config, mod *modclient.
 				PositionJump            *bool `json:"positionJump"`
 				PermissionFactionChange *bool `json:"permissionFactionChange"`
 				LoginTracking           *bool `json:"loginTracking"`
+				ProgressJump            *bool `json:"progressJump"`
 			} `json:"audit"`
 
 			ScenarioCache *struct {
@@ -416,6 +417,9 @@ func registerConfigRoutes(mux *http.ServeMux, cfg config.Config, mod *modclient.
 				}
 				if body.Audit.LoginTracking != nil {
 					s.Audit.LoginTracking = *body.Audit.LoginTracking
+				}
+				if body.Audit.ProgressJump != nil {
+					s.Audit.ProgressJump = *body.Audit.ProgressJump
 				}
 			}
 			if body.ScenarioCache != nil {

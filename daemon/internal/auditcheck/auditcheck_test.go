@@ -30,6 +30,8 @@ func testCfg(t *testing.T) config.Config {
 func resetState() {
 	mu.Lock()
 	lastPos = map[string]lastSeen{}
+	lastProgress = map[string]progressSample{}
+	adminEditAt = map[string]time.Time{}
 	flaggedFuel = map[int]bool{}
 	flaggedStacks = map[string]int{}
 	mu.Unlock()
@@ -351,5 +353,81 @@ func TestPollOnce_NoOpWhenAllDisabled(t *testing.T) {
 	}
 	if len(events) != 0 {
 		t.Fatalf("всё выключено — событий быть не должно, получили %d", len(events))
+	}
+}
+
+func progressPlayer(steamID string, exp, upgrade int) modclient.Player {
+	return modclient.Player{
+		SteamId: steamID,
+		Name:    steamID,
+		Online:  true,
+		Info:    &modclient.PlayerLiveInfo{Exp: exp, Upgrade: upgrade},
+	}
+}
+
+func progressEvents(t *testing.T, cfg config.Config) []audit.Event {
+	t.Helper()
+	events, err := audit.Recent(cfg, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []audit.Event
+	for _, e := range events {
+		if e.Category == audit.CategoryProgressJump {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func TestCheckProgressJumps_FlagsRealCheaterGain(t *testing.T) {
+	resetState()
+	cfg := testCfg(t)
+
+	lastProgress["steam1"] = progressSample{exp: 259018, upgrade: 0, at: time.Now().Add(-30 * time.Second)}
+
+	checkProgressJumps(cfg, []modclient.Player{progressPlayer("steam1", 469018, 9999)})
+
+	if got := progressEvents(t, cfg); len(got) != 2 {
+		t.Fatalf("ожидали 2 события (опыт + очки), получили %+v", got)
+	}
+}
+
+func TestCheckProgressJumps_HonestMaxNotFlagged(t *testing.T) {
+	resetState()
+	cfg := testCfg(t)
+
+	lastProgress["steam1"] = progressSample{exp: 314378, upgrade: 10, at: time.Now().Add(-30 * time.Second)}
+
+	checkProgressJumps(cfg, []modclient.Player{progressPlayer("steam1", 319094, 25)})
+
+	if got := progressEvents(t, cfg); len(got) != 0 {
+		t.Fatalf("честный темп не должен давать событий, получили %+v", got)
+	}
+}
+
+func TestCheckProgressJumps_NoBaselineAcrossSessions(t *testing.T) {
+	resetState()
+	cfg := testCfg(t)
+	lastProgress["steam1"] = progressSample{exp: 1000, at: time.Now().Add(-30 * time.Second)}
+
+	checkProgressJumps(cfg, nil)
+	checkProgressJumps(cfg, []modclient.Player{progressPlayer("steam1", 500000, 0)})
+
+	if got := progressEvents(t, cfg); len(got) != 0 {
+		t.Fatalf("сравнения между сессиями быть не должно, получили %+v", got)
+	}
+}
+
+func TestCheckProgressJumps_AdminEditIgnored(t *testing.T) {
+	resetState()
+	cfg := testCfg(t)
+	lastProgress["steam1"] = progressSample{exp: 1000, upgrade: 0, at: time.Now().Add(-30 * time.Second)}
+	NoteAdminEdit("steam1")
+
+	checkProgressJumps(cfg, []modclient.Player{progressPlayer("steam1", 500000, 500)})
+
+	if got := progressEvents(t, cfg); len(got) != 0 {
+		t.Fatalf("правка из панели не должна попадать в аудит, получили %+v", got)
 	}
 }

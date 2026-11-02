@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"elb/daemon/internal/audit"
+	"elb/daemon/internal/auditcheck"
 	"elb/daemon/internal/backpack"
 	"elb/daemon/internal/chatlog"
 	"elb/daemon/internal/config"
@@ -282,6 +283,9 @@ func queueableModPost(cfg config.Config, mod *modclient.Client, modPath string) 
 		}
 
 		if online {
+			if modPath == "/players/setinfo" {
+				auditcheck.NoteAdminEdit(probe.SteamId)
+			}
 			v, err := mod.Post(modPath, json.RawMessage(raw))
 			if err != nil {
 				writeErr(w, err)

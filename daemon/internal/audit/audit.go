@@ -22,6 +22,7 @@ const (
 	CategoryPositionJump            Category = "positionJump"
 	CategoryPermissionFactionChange Category = "permissionFactionChange"
 	CategoryLoginTracking           Category = "loginTracking"
+	CategoryProgressJump            Category = "progressJump"
 )
 
 type Event struct {
